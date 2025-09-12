@@ -1,3 +1,10 @@
+---
+title: "quarto.yml"
+format: html
+editor: visual
+---
+
+```         
 project:
   type: website
   output-dir: docs
@@ -6,15 +13,16 @@ website:
   title: "STA 9750 Submission Material"
   description:
     Course Projects for STA 9750 at Baruch College
-  site-url: "https://<lolxd23>.github.io/STA9750-2025-FALL/"
+  site-url: "https://<GITHUB_NAME>.github.io/STA9750-2025-FALL/"
   navbar:
     background: primary
     search: false
     
 format:
   html:
-    theme: darkly
+    theme: <THEME>
     toc: false
 
 editor:
   mode: source
+```

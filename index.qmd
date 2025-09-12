@@ -1,3 +1,48 @@
 ---
 title: "Hajara Eve Muzammal"
 ---
+
+
+
+
+
+
+
+
+
+![Its me!](IMG_5187.jpeg)
+
+
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+
+if(!require("leaflet")){
+    options(repos=c(CRAN="https://cloud.r-project.org"))
+    install.packages("leaflet")
+    stopifnot(require("leaflet"))
+}
+
+baruch_longitude <- -73.98333
+baruch_latitude  <- +40.74028
+
+leaflet() |>
+  addTiles() |>
+  setView(baruch_longitude, baruch_latitude, zoom=17) |>
+  addPopups(baruch_longitude, baruch_latitude, 
+            "I am a Master's student at <b>Baruch College</b>!")
+```
+
+
+[Link to my resume :)](https://docs.google.com/document/d/1w3jJ_ULNmRjnRbmlRdANMQIk8eIxVfsY9cT_K4NzcDA/edit?tab=t.0)
+
+
+
+```{r}
+#| include: false
+1+1
+```
+--------------
+Last Updated: `r format(Sys.time(), "%A %m %d, %Y at %H:%M%p")`
