@@ -92,8 +92,10 @@ GLOBAL_TOP_10 |>
 
 ```{r}
 # Question 1
+library(dplyr)
 COUNTRY_TOP_10 |>
     summarise(n_countries = n_distinct(country_name))
+
 ```
 
 ```{r}
@@ -180,6 +182,7 @@ q8 <- GLOBAL_TOP_10 |>
 
 ```{r}
 # question 9
+library(tidyverse)
 # Find films that hit #1 after debuting at a lower rank
 q9_films <- COUNTRY_TOP_10 |>
     filter(country_name == "United States",
