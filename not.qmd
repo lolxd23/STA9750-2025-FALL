@@ -1,0 +1,323 @@
+---
+title: "Netflix Global Analysis - Mini Project 01"
+author: "Hajara Muzammal"
+format: html
+theme: cosmo
+---
+
+With notable releases including Squid Games Season 2, Wednesday Season 2, and the animated premiere of KPOP Demon Hunters, 2025 has been a huge year for Netflix. There is no slowing down of this momentum. Netflix's success is only expected to increase as the much awaited Stranger Things final season approaches.\
+\
+Let's examine the popular programming from the previous few years in more detail.
+
+```{r}
+if(!dir.exists(file.path("data", "mp01"))){
+  dir.create(file.path("data", "mp01"), showWarnings=FALSE, recursive=TRUE)
+}
+
+GLOBAL_TOP_10_FILENAME <- file.path("data", "mp01", "global_top10_alltime.csv")
+
+if(!file.exists(GLOBAL_TOP_10_FILENAME)){
+  download.file("https://www.netflix.com/tudum/top10/data/all-weeks-global.tsv", 
+                destfile=GLOBAL_TOP_10_FILENAME)
+}
+
+COUNTRY_TOP_10_FILENAME <- file.path("data", "mp01", "country_top10_alltime.csv")
+
+if(!file.exists(COUNTRY_TOP_10_FILENAME)){
+  download.file("https://www.netflix.com/tudum/top10/data/all-weeks-countries.tsv", 
+                destfile=COUNTRY_TOP_10_FILENAME)}
+```
+
+# ![]()Task 1: Lets load and import packages
+
+```{r}
+if(!require("tidyverse")) install.packages("tidyverse")
+library(readr)
+library(dplyr)
+
+GLOBAL_TOP_10 <- read_tsv(GLOBAL_TOP_10_FILENAME)
+```
+
+```{r}
+str(GLOBAL_TOP_10)
+```
+
+# Task 2: Data Cleaning
+
+Replacing all the ‘N/A’ values with NA in the season_title column
+
+```{r}
+glimpse(GLOBAL_TOP_10)
+
+
+
+```
+
+```{r}
+library(dplyr)
+
+GLOBAL_TOP_10 <- GLOBAL_TOP_10 |>
+    mutate(season_title = if_else(season_title=="N/A", NA, season_title))
+```
+
+```{r}
+glimpse(GLOBAL_TOP_10)
+```
+
+```{r}
+glimpse(GLOBAL_TOP_10)
+```
+
+# Task 3: Data Import
+
+```{r}
+COUNTRY_TOP_10 <- read_tsv(COUNTRY_TOP_10_FILENAME, na = "N/A")
+```
+
+```{r}
+glimpse(COUNTRY_TOP_10)
+```
+
+```{r}
+library(DT)
+GLOBAL_TOP_10 |> 
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE))
+```
+
+```{r}
+library(stringr)
+format_titles <- function(df){
+    colnames(df) <- str_replace_all(colnames(df), "_", " ") |> str_to_title()
+    df
+}
+
+GLOBAL_TOP_10 |> 
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+```{r}
+GLOBAL_TOP_10 |> 
+    select(-season_title) |>
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+```{r}
+GLOBAL_TOP_10 |> 
+    mutate(`runtime_(minutes)` = round(60 * runtime)) |>
+    select(-season_title, 
+           -runtime) |>
+    format_titles() |>
+    head(n=20) |>
+    datatable(options=list(searching=FALSE, info=FALSE)) |>
+    formatRound(c('Weekly Hours Viewed', 'Weekly Views'))
+```
+
+# Task 4: EDA
+
+Question 1: **How many different countries does Netflix operate in?**
+
+```{r}
+# Question 1
+library(dplyr)
+COUNTRY_TOP_10 |>
+    summarise(n_countries = n_distinct(country_name))
+
+
+
+```
+
+Question 2: **Which non-English-language film has spent the most cumulative weeks in the global top 10? How many weeks did it spend?**
+
+```{r}
+# Question 2
+GLOBAL_TOP_10 |>
+  filter(category == 'Films (Non-English)') |>
+  filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10))|>
+  select(show_title, cumulative_weeks_in_top_10) |>
+  slice_max(cumulative_weeks_in_top_10)
+```
+
+Question 3: **What is the longest film (English or non-English) to have ever appeared in the Netflix global Top 10? How long is it in minutes?**
+
+```{r}
+# Question 3
+GLOBAL_TOP_10 |> 
+  mutate(runtime_in_minutes = round(60 * runtime)) |>
+  filter(category == 'Films (English)' | category == 'Films (Non-English)') |>
+  select(category, show_title, runtime_in_minutes) |>
+  slice_max(runtime_in_minutes)
+```
+
+Question 4: **For each of the four categories, what program has the most total hours of global viewership?**
+
+```{r}
+# question 4
+GLOBAL_TOP_10 |> 
+  filter(category %in% c('Films (English)', 'Films (Non-English)', 'TV (Non-English)', 'TV (English)')) |>
+  group_by(category, show_title) |>
+  summarise(total_hours_view = sum(weekly_hours_viewed)) |>
+  slice_max(total_hours_view) |>
+  datatable(options=list(searching=FALSE, info=FALSE))|>
+  formatRound(c('total_hours_view'))
+```
+
+Question 5: **Which TV show had the longest run in a country’s Top 10? How long was this run and in what country did it occur?**
+
+```{r}
+# question 5
+COUNTRY_TOP_10 |>
+  filter(category == 'TV') |>
+  filter(cumulative_weeks_in_top_10 == max(cumulative_weeks_in_top_10)) |>
+  select(country_name, show_title, longest_run_in_weeks = cumulative_weeks_in_top_10)
+```
+
+Question 6: **Netflix provides over 200 weeks of service history for all but one country in our data set. Which country is this and when did Netflix cease operations in that country?**
+
+```{r}
+# question 6
+COUNTRY_TOP_10 |>
+  group_by(country_name) |>
+  summarise(week_count = n_distinct(week),
+            last_week = max(week)) |>
+  filter(week_count <= 200)
+```
+
+Question 7: **What is the total viewership of the TV show *Squid Game*?**
+
+```{r}
+# question 7
+squid_game_hours <- GLOBAL_TOP_10 %>%
+  filter(show_title == "Squid Game") %>%
+  summarise(total_hours = sum(weekly_hours_viewed, na.rm=TRUE))
+
+datatable(squid_game_hours, options = list(searching = FALSE, info = FALSE))
+```
+
+Question 8: The movie *Red Notice* has a runtime of 1 hour and 58 minutes. Approximately how many views did it receive in 2021?
+
+```{r}
+# question 8
+GLOBAL_TOP_10 |>
+  filter(year(week)== 2021) |>
+  filter(show_title == 'Red Notice') |>
+  summarise(total_hours_watched = sum(weekly_hours_viewed)) |> 
+  summarise(view_count = total_hours_watched/(118/60))
+```
+
+Question 9: **How many Films reached Number 1 in the US but did not originally debut there? That is, find films that first appeared on the Top 10 chart at, *e.g.*, Number 4 but then became more popular and eventually hit Number 1? What is the most recent film to pull this off?**
+
+```{r}
+# question 9
+us_films <- COUNTRY_TOP_10 |>
+  filter(country_name == "United States") |>
+  group_by(show_title) |>
+  summarise(
+    debut_rank = first(weekly_rank),           
+    first_week = first(week),                
+    ever_number1 = any(weekly_rank == 1),     
+    last_week_number1 = ifelse(
+      any(weekly_rank == 1),
+      max(week[weekly_rank == 1], na.rm = TRUE),
+      as.Date(NA)
+    ),
+    .groups = "drop"
+  ) |>
+  filter(debut_rank > 1 & ever_number1)     
+
+# Number of films
+num_films <- nrow(us_films)
+
+# Most recent film to do it
+most_recent <- us_films |>
+  filter(last_week_number1 == max(last_week_number1, na.rm = TRUE))
+
+datatable(us_films, options = list(searching = FALSE, info = FALSE))
+   
+```
+
+Question 10: **Which TV show/season hit the top 10 in the most countries in its debut week? In how many countries did it chart?**
+
+```{r}
+COUNTRY_TOP_10 |> 
+  filter(category == 'TV') |>
+  group_by(show_title,country_name) |> 
+  summarise(debut_week = min(week), .groups = 'drop') |>
+  group_by(show_title, debut_week) |>
+  summarise(countries_charted = n_distinct(country_name), .groups = 'drop') |>
+  arrange(desc(countries_charted)) |>
+  head(5)
+```
+
+```{r}
+library(dplyr)
+
+# Get Stranger Things total viewership and weeks
+st_stats <- GLOBAL_TOP_10 |>
+    filter(str_detect(show_title, "Stranger Things")) |>
+    summarise(
+        total_hours = sum(weekly_hours_viewed, na.rm = TRUE),
+        total_weeks = sum(cumulative_weeks_in_top_10, na.rm = TRUE),
+        seasons = n_distinct(show_title)
+    )
+
+# Get country reach
+st_countries <- COUNTRY_TOP_10 |>
+    filter(str_detect(show_title, "Stranger Things")) |>
+    summarise(countries = n_distinct(country_name))
+
+# Compare to other popular English TV shows
+tv_comparison <- GLOBAL_TOP_10 |>
+    filter(str_detect(category, "TV"),
+           str_detect(category, "English")) |>
+    group_by(show_title) |>
+    summarise(
+        total_hours = sum(weekly_hours_viewed, na.rm = TRUE),
+        total_weeks = max(cumulative_weeks_in_top_10, na.rm = TRUE)
+    ) |>
+    arrange(desc(total_hours)) |>
+    head(10)
+
+# Check Stranger Things ranking
+st_ranking <- tv_comparison |>
+    mutate(rank = row_number()) |>
+    filter(str_detect(show_title, "Stranger Things"))
+```
+
+## The Wait Is Almost Over: *Stranger Things* Returns for Epic Final Season in Late 2025
+
+### Global Phenomenon Captivates Nearly 3 Billion Hours of Viewership Across 93 Countries as Netflix Prepares for Series Finale
+
+**LOS GATOS, Calif. – October 1, 2025** – Netflix today announced that *Stranger Things*, one of the most-watched English-language series in Netflix history, will conclude with its highly anticipated fifth and final season arriving later this year. As fans prepare to say goodbye to Eleven, Mike, Dustin, and the rest of the Hawkins crew, the streaming giant is celebrating the unprecedented global success of the beloved sci-fi drama.
+
+Since its debut, *Stranger Things* has amassed an astounding **2.97 billion hours viewed globally**, cementing its place as the **third most-watched English-language TV series** in Netflix history. The show's cultural impact has transcended borders, captivating audiences in **93 countries** and maintaining a presence in the Netflix Top 10 for **19 consecutive weeks** across its four seasons.
+
+Season 5 promises to deliver an epic conclusion to the story that began in 2016, bringing closure to beloved character arcs while delivering the monster-fighting fans have come to expect. The Duffer Brothers have promised that this final season will be their most ambitious yet, with higher stakes, deeper emotional moments, and answers to the fan theories that have captivated viewers for nearly a decade.
+
+As the world prepares to return to Hawkins one last time, *Stranger Things* stands as a power of compelling storytelling, memorable characters, and the magic that happens when a show captures the hearts of audiences around the globe.
+
+*Stranger Things* Season 5 will premiere on Netflix in late 2025.
+
+## Netflix Conquers India: Hindi-Language Content Drives Explosive Growth in World's Most Populous Nation
+
+**MUMBAI, India** – Netflix today celebrated a milestone year of unprecedented growth in India, with the streaming giant establishing itself as the premier destination for Hindi-language films and series. India has emerged as Netflix's second-largest market for new subscriber additions in 2024, with the country ranking third globally in revenue growth percentage. Media analysts estimate Netflix now serves approximately 12 million paid subscribers in India, with the company's Indian operations reporting 24% revenue growth in fiscal year 2023, reaching Rs 2,214 crore.
+
+The success story is powered by authentically Indian content that resonates deeply with local audiences. Blockbuster Hindi films including *Animal* (21.6 million views), *Laapataa Ladies* (19.9 million views), *Haseen Dillruba*, and *Sooryavanshi* have dominated Netflix's Top 10 charts in India for months. Critically, these successes represent uniquely Indian phenomena: films like *Haseen Dillruba* maintained Top 10 status for 21 consecutive weeks in India without ever charting in the United States, demonstrating Netflix's ability to serve diverse, localized tastes. Sanjay Leela Bhansali's epic *Heeramandi: The Diamond Bazaar* became Netflix's most-watched Indian drama series with 15 million views.
+
+Looking ahead, Netflix's momentum shows consistent growth, with between 80-108 unique titles appearing in India's weekly Top 10 charts each quarter since 2021. As the world's most populous nation continues its digital transformation, Netflix's investments in Hindi-language content and creator partnerships are establishing the company as an part of India's entertainment future.
+
+### Korean Dramas Drive Record Engagement Across Southeast Asia as Netflix Expands Regional Content Strategy
+
+**SINGAPORE** – Netflix today highlighted the remarkable performance of Korean-language content across Southeast Asian markets, where K-dramas have consistently dominated Top 10 charts throughout 2024. Popular series including *Alchemy of Souls*, *Crash Landing on You*, and *Hometown Cha-Cha-Cha* have maintained viewer engagement for months across Malaysia, Singapore, Thailand, the Philippines, Vietnam, and Indonesia, demonstrating the region's strong storytelling.
+
+The sustained popularity is noteworthy: *Alchemy of Souls* remained in regional Top 10 charts for 42 weeks, while *Crash Landing on You* held viewers' attention for 35 weeks and *Vincenzo* for 29 weeks. This performance significantly exceeds typical content lifecycles and reflects genuine audience connection with Korean narratives. Southeast Asian markets showed 8.6% growth in content diversity year-over-year, with unique titles expanding from 754 in 2023 to 819 in 2024, indicating both growing subscriber bases and increased content consumption across the region's combined population of over 670 million people.
+
+"Korean dramas have found an incredibly receptive audience throughout Southeast Asia," said Monika Shergill, VP of Content for Netflix Asia-Pacific. "We're seeing viewers connect deeply with these stories—whether it's the legal drama *Extraordinary Attorney Woo*, the romance of *Business Proposal*, or the suspense of *The Glory*. This sustained engagement validates our strategy of investing in diverse, quality content that travels across borders. We'll continue working closely with Korean creators while also expanding our partnerships with local Southeast Asian storytellers to serve this dynamic and growing market."
+
+### 
