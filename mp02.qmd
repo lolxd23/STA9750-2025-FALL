@@ -617,6 +617,37 @@ ggplot(household_size_data, aes(
 
 The spaghetti plot displays the evolution of average household size across hundreds of US metropolitan areas from 2009 to 2023, with each colored line representing a different CBSA, revealing substantial variation in household composition ranging from approximately 2.0 to 3.5 persons per household. The majority of metros cluster between 2.5 and 3.0 persons per household, showing relatively stable trends over time with a slight general decline toward 2023, reflecting broader demographic shifts toward smaller household sizes driven by factors such as aging populations, delayed family formation, and increased single-person households. Notable outliers at the top of the chart (household sizes above 3.25) likely represent metros with higher birth rates, multi-generational living arrangements, or immigrant populations, while the gap in 2020 (visible as a horizontal discontinuity in the lines) reflects the absence of ACS data collection during the COVID-19 pandemic.
 
+## ***Extra credit 2:*** 
+
+```{r}
+# Load gghighlight
+library(gghighlight)
+
+# Create the highlighted spaghetti plot
+household_size_data |>
+  ggplot(aes(x = year, y = avg_household_size, 
+             color = NAME, group = NAME)) +
+  geom_line(linewidth = 0.8) +
+  gghighlight(
+    NAME %in% c("New York-Newark-Jersey City, NY-NJ-PA Metro Area", 
+                "Los Angeles-Long Beach-Anaheim, CA Metro Area"),
+    use_direct_label = TRUE,
+    label_key = NAME,
+    unhighlighted_params = list(linewidth = 0.3, alpha = 0.3, color = "gray70")
+  ) +
+  labs(
+    title = "Average Household Size Over Time Across CBSAs",
+    subtitle = "New York and Los Angeles CBSAs Highlighted",
+    x = "Year",
+    y = "Average Household Size",
+    caption = "Source: American Community Survey"
+  ) +
+  theme_bw() +
+  theme(legend.position = "none")
+```
+
+This visualization effectively uses the `gghighlight` package to transform an unreadable spaghetti plot into a clear comparison by highlighting New York and Los Angeles CBSAs while maintaining all other metropolitan areas as muted background context. The plot reveals that both major metros experienced declining average household sizes from 2009 to 2022, with Los Angeles consistently maintaining larger households (around 3.0 persons) compared to New York (around 2.5-2.8 persons), likely reflecting differences in housing stock, demographic composition, and multi-generational living patterns. The gray background lines demonstrate that while most CBSAs follow similar downward trends, there is considerable variation nationwide, with some areas maintaining household sizes above 4.0 persons, providing important context for understanding where these major metros fit within the broader national landscape.
+
 # **Task 4: Rent Burden.**
 
 # **Building Indices of Housing Affordability and Housing Stock Grow**
@@ -1187,41 +1218,47 @@ affordability_data |>
 ::: {.callout-note icon=false}
 ## Policy Brief
 
-## **FEDERAL YIMBY HOUSING INITIATIVE - POLICY BRIEF**
+**FEDERAL YIMBY HOUSING INITIATIVE - POLICY BRIEF**
 
-### **THE PROBLEM**
+**THE PROBLEM**
 
-Rent is too high in many cities. But the chart shows 15 cities that kept rent affordable by building more housing. They prove that **building works**.
+Rent is too high in many cities. But the chart shows 15 cities that kept rent affordable by building more housing. They prove that building works.
 
-### **PROPOSED SPONSORS**
+**PROPOSED SPONSORS**
 
-### **Primary Sponsor: Greensboro, NC**
+**Primary Sponsor: Greensboro, NC**
 
--   Kept rent at national average despite growth.
+-   Kept rent at national average despite growth
 
--   Model YIMBY city.
+-   Model YIMBY city
+
+-   **14.2% young adults (ages 25-34)** - attracting millennials.
 
 **Co-Sponsor: New York, NY**
 
--   Rent 40% above average.
+-   Rent 40% above average
 
 -   Needs to build more
 
-### **WHO THIS HELPS**
+-   **Only 13.8% young adults** - losing the next generation to affordable cities
+
+**WHO THIS HELPS**
 
 **Construction Workers:** 50,000+ new jobs building homes
 
 **Healthcare Workers:** Lower rent = \$10,000 more in their pocket each year
 
+**Young Professionals (Ages 25-34):** Cities that build housing retain millennials. Our analysis shows successful YIMBY cities like Provo, UT (16.8% young adults) and Iowa City, IA (16.3% young adults) attract and keep young talent. This creates innovation, new businesses, and long-term tax revenue.
+
 **HOW IT WORKS**
 
 **Rent Burden Index**
 
--   100 = average.
+-   100 = average
 
 -   Above 120 = too expensive
 
--   Goal: Get everyone closer to 100.
+-   Goal: Get everyone closer to 100
 
 **Housing Growth Index**
 
@@ -1231,17 +1268,68 @@ Rent is too high in many cities. But the chart shows 15 cities that kept rent af
 
 -   Goal: Build faster than population grows
 
+**Millennial Appeal Index (NEW)**
+
+-   Percentage of residents aged 25-34
+
+-   Higher percentages = city is attracting young workers and families
+
+-   Goal: Create vibrant, economically dynamic cities
+
 **Funding**
 
 -   Give money to cities that build more housing
 
 -   More building = more funding
 
+-   Bonus funding for cities that increase young adult population
+
 **BOTTOM LINE**
 
 The 15 cities on the chart (Gulfport MS, Harrisonburg VA, Lake Charles LA, etc.) kept rent affordable by building housing.
 
-**Federal funding should reward cities that build.**
+Federal funding should reward cities that build AND attract the next generation of workers.
 
-This creates jobs, lowers rent, and helps families.
+This creates jobs, lowers rent, helps families, and keeps America competitive
 :::
+
+***Extra Credit 3:***
+
+Arts & Entertainment Employment
+
+```{r}
+library(tidycensus)
+
+# Get young adult population
+young_adults <- get_acs(
+  geography = "cbsa",
+  variables = c(
+    male_25_29 = "B01001_010",
+    male_30_34 = "B01001_011",
+    female_25_29 = "B01001_034",
+    female_30_34 = "B01001_035",
+    total_pop = "B01001_001"
+  ),
+  year = 2022,
+  survey = "acs1"
+) |>
+  select(GEOID, NAME, variable, estimate) |>
+  pivot_wider(names_from = variable, values_from = estimate) |>
+  mutate(
+    young_adults_total = male_25_29 + male_30_34 + female_25_29 + female_30_34,
+    young_adult_pct = (young_adults_total / total_pop) * 100,
+    GEOID = as.numeric(GEOID)  # Convert GEOID to numeric to match your data
+  )
+
+# Now join with your household_size_data
+cbsa_with_appeal <- household_size_data |>
+  filter(year == 2022) |>
+  left_join(young_adults, by = "GEOID") |>
+  select(GEOID, NAME.x, population, young_adults_total, young_adult_pct) |>
+  rename(NAME = NAME.x)
+
+# View the top CBSAs by young adult percentage
+cbsa_with_appeal |>
+  arrange(desc(young_adult_pct)) |>
+  head(10)
+```
