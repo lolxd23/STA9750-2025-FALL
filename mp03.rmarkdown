@@ -1,0 +1,822 @@
+---
+title: "Mini-Project #03: Visualizing and Maintaining the Green Canopy of NYC"
+author: Hajara Muzammal
+format: 
+  html:
+    code-fold: true
+    code-summary: "Show code"
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# Introduction
+
+New York City's Department of Parks and Recreation manages nearly
+900,000 trees across all five boroughs, providing critical environmental
+benefits to millions of residents, yet access to this green
+infrastructure remains unequal across neighborhoods. This project
+analyzes the NYC TreeMap dataset alongside City Council District
+boundaries to explore patterns in tree distribution, health, and species
+diversity at the district level. Using spatial analysis and data
+visualization, we identify opportunities for targeted intervention and
+propose a data-driven tree revitalization program that addresses gaps in
+the urban canopy and promotes environmental equity.
+
+Data Preparation
+
+```{r}
+# Load required packages
+library(tidyverse)
+library(sf)
+library(httr2)
+```
+
+# Task 1: Download NYC City Council District Boundaries
+
+```{r}
+# ============================================================================
+# Task 1: Download NYC City Council District Boundaries
+# ============================================================================
+
+download_council_districts <- function(
+  url = "https://www.nyc.gov/assets/planning/download/zip/data-maps/open-data/nycc_24d.zip",
+  data_dir = "data/mp03",
+  zip_file = "nyc_council_districts.zip"
+) {
+  
+  # Step 1: Create directory if it doesn't exist
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+    message("Created directory: ", data_dir)
+  }
+  
+  # Step 2: Download zip file only if needed
+  zip_path <- file.path(data_dir, zip_file)
+  
+  if (!file.exists(zip_path)) {
+    message("Downloading council district boundaries...")
+    download.file(url, zip_path, mode = "wb")
+    message("Download complete: ", zip_path)
+  } else {
+    message("Zip file already exists, skipping download")
+  }
+  
+  # Step 3: Unzip the file only if needed
+  # Check if shp file already exists
+  shp_files <- list.files(data_dir, pattern = "\\.shp$", full.names = TRUE)
+  
+  if (length(shp_files) == 0) {
+    message("Unzipping file...")
+    unzip(zip_path, exdir = data_dir)
+    message("Unzip complete")
+    # Get the shp file after unzipping
+    shp_files <- list.files(data_dir, pattern = "\\.shp$", full.names = TRUE)
+  } else {
+    message("Shapefile already exists, skipping unzip")
+  }
+  
+  # Step 4: Read the shapefile using st_read
+  message("Reading shapefile...")
+  districts <- st_read(shp_files[1], quiet = TRUE)
+  message("Shapefile read successfully")
+  
+  # Step 5: Transform to WGS 84
+  message("Transforming to WGS84 coordinate system...")
+  districts_wgs84 <- st_transform(districts, crs = "WGS84")
+  
+  message("Transformation complete!")
+  message("Number of council districts: ", nrow(districts_wgs84))
+  
+  # Step 6: Return the transformed data
+  return(districts_wgs84)
+}
+
+# Execute the function
+council_districts <- download_council_districts()
+
+# View the data
+glimpse(council_districts)
+cat("\nCouncil Districts loaded:", nrow(council_districts), "\n")
+
+# Quick plot to verify
+plot(st_geometry(council_districts), 
+     main = "NYC Council Districts (WGS84)",
+     col = "lightblue",
+     border = "black")
+```
+
+Above is a visual of NYC Council Districts.
+
+# Task 2: Download Tree Points
+
+```{r}
+# ============================================================================
+# Task 2: Download NYC Tree Points Data
+# ============================================================================
+
+download_tree_points <- function(
+  base_url = "https://data.cityofnewyork.us/resource/hn5i-inap.geojson",
+  limit = 5000,
+  data_dir = "data/mp03/trees",
+  pause = 1
+) {
+  
+  # Load required packages
+  library(httr2)
+  library(sf)
+  library(dplyr)
+  
+  # Create trees directory if it doesn't exist
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+    message("Created directory: ", data_dir)
+  }
+  
+  # ---- Phase 1: Download all pages ----
+  files <- character()
+  offset <- 0L
+  page <- 1L
+  
+  message("Starting download of NYC Tree Points data...")
+  message("Using limit = ", limit, " records per page\n")
+  
+  repeat {
+    # Construct filename with consistent naming schema
+    fname <- file.path(data_dir, 
+                       sprintf("treepoints_%08d_%05d.geojson", offset, limit))
+    
+    # Only download if file doesn't exist
+    if (!file.exists(fname)) {
+      message("Downloading page ", page, " (offset: ", offset, ")...")
+      
+      # Build request using httr2
+      req <- request(base_url) |>
+        req_url_query(
+          `$limit`  = limit,
+          `$offset` = offset
+        ) |>
+        req_timeout(300) |>       # 5 minute timeout
+        req_retry(max_tries = 3)   # Retry failed requests
+      
+      # Perform request with error handling
+      tryCatch({
+        resp <- req_perform(req)
+        writeBin(resp_body_raw(resp), fname)
+        message("  Saved to: ", basename(fname))
+        Sys.sleep(pause)  # Be respectful to the API
+      }, error = function(e) {
+        message("  Error: ", e$message)
+        message("  Retrying in 5 seconds...")
+        Sys.sleep(5)
+        resp <- req_perform(req)
+        writeBin(resp_body_raw(resp), fname)
+      })
+      
+    } else {
+      message("Page ", page, " already exists (", basename(fname), "), skipping download")
+    }
+    
+    # Read the file to check how many records we got
+    trees_page <- try(suppressWarnings(st_read(fname, quiet = TRUE)), silent = TRUE)
+    nret <- if (inherits(trees_page, "sf")) nrow(trees_page) else 0L
+    
+    message("  Page ", page, " contains ", nret, " records")
+    files <- c(files, fname)
+    
+    # If we got fewer records than limit, we've reached the end
+    if (nret < limit) {
+      message("\nReached end of dataset at page ", page)
+      message("Total pages downloaded: ", page, "\n")
+      break
+    }
+    
+    # Update for next iteration
+    offset <- offset + limit
+    page <- page + 1L
+  }
+  
+  # ---- Phase 2: Read all GeoJSON files ----
+  message("Reading and combining ", length(files), " GeoJSON files...")
+  
+  all_trees <- lapply(files, function(f) {
+    df <- st_read(f, quiet = TRUE)
+    
+    
+    
+    geom_col <- attr(df, "sf_column")
+    char_cols <- setdiff(names(df), geom_col)
+    
+    for (col in char_cols) {
+      df[[col]] <- as.character(df[[col]])
+    }
+    
+    return(df)
+  })
+  
+  
+  message("Combining all datasets with bind_rows()...")
+  trees_combined <- bind_rows(all_trees)
+  
+  # Convert columns to proper types after combining
+  message("Converting columns to proper data types...")
+  
+  # Convert date columns
+  if ("planteddate" %in% names(trees_combined)) {
+    trees_combined$planteddate <- as.POSIXct(
+      trees_combined$planteddate,
+      format = "%Y-%m-%dT%H:%M:%S",
+      tz = "UTC"
+    )
+  }
+  
+  if ("curb_loc" %in% names(trees_combined)) {
+    trees_combined$curb_loc <- as.character(trees_combined$curb_loc)
+  }
+  
+  # Convert numeric columns
+  numeric_cols <- c("tree_dbh", "stump_diam", "zipcode", "zip_city",
+                    "cb_num", "borocode", "latitude", "longitude",
+                    "council_district", "census_tract", "bin", "bbl")
+  
+  for (col in numeric_cols) {
+    if (col %in% names(trees_combined)) {
+      trees_combined[[col]] <- as.numeric(trees_combined[[col]])
+    }
+  }
+  
+  message("\n===========================================")
+  message("Download and combination complete!")
+  message("Total records: ", format(nrow(trees_combined), big.mark = ","))
+  message("Total columns: ", ncol(trees_combined))
+  message("===========================================\n")
+  
+  return(trees_combined)
+}
+
+# Execute the download function
+trees <- download_tree_points(limit = 5000, pause = 1)
+
+# Verify the data
+glimpse(trees)
+
+# Basic summary
+cat("\n=== NYC Trees Dataset Summary ===\n")
+cat("Total trees:", format(nrow(trees), big.mark = ","), "\n")
+cat("Variables:", ncol(trees), "\n")
+cat("Coordinate system:", st_crs(trees)$input, "\n\n")
+```
+
+# Task 3: Plot All Tree Points
+
+## Data Integration and Initial Exploration 
+
+```{r}
+# Task 3: Create map with trees over districts
+map_all_trees <- ggplot() +
+  geom_sf(data = council_districts, fill = "white", color = "black", linewidth = 0.5) +
+  geom_sf(data = trees, color = "darkgreen", size = 0.05, alpha = 0.2) +
+  theme_minimal() +
+  labs(title = "NYC Street Trees by Council District",
+       subtitle = paste("Showing", format(nrow(trees), big.mark = ","), "trees")) +
+  theme(axis.text = element_blank(), axis.title = element_blank(), panel.grid = element_blank())
+
+print(map_all_trees)
+  
+```
+
+The NYC Street Trees has 1,094,587 trees.
+
+## Spatial Join and Analysis
+
+```{r}
+#Spatial Join & Analysis
+
+# Load packages
+library(tidyverse)
+library(sf)
+
+# Re-download trees (it will use cached files, so it's fast)
+trees <- download_tree_points(limit = 5000, pause = 1)
+
+# Verify it's an sf object now
+cat("Trees class:", class(trees), "\n")
+
+# Now the spatial join will work
+trees_with_districts <- st_join(trees, council_districts, join = st_intersects)
+
+# Count trees per district
+trees_by_district <- trees_with_districts |>
+  st_drop_geometry() |>
+  count(coun_dist, name = "num_trees") |>
+  arrange(desc(num_trees))
+
+print(trees_by_district)
+
+# Create choropleth map
+districts_with_counts <- council_districts |>
+  left_join(trees_by_district, by = "coun_dist") |>
+  mutate(num_trees = replace_na(num_trees, 0))
+
+ggplot(districts_with_counts) +
+  geom_sf(aes(fill = num_trees), color = "white", linewidth = 0.3) +
+  scale_fill_viridis_c(name = "Number of Trees", labels = scales::comma) +
+  theme_minimal() +
+  labs(title = "Tree Distribution by Council District") +
+  theme(axis.text = element_blank(), 
+        axis.title = element_blank(), 
+        panel.grid = element_blank())
+```
+
+# Task 4: District-Level Analysis of Tree Coverage
+
+1)  Which council district has the most trees?
+
+```{r}
+q1_most_trees <- trees_with_districts |>
+  st_drop_geometry() |>
+  filter(!is.na(coun_dist)) |>
+  count(coun_dist, name = "num_trees") |>
+  arrange(desc(num_trees)) |>
+  slice(1)
+
+q1_most_trees
+```
+
+2)  Which district has the highest density of trees?
+
+```{r}
+q2_tree_density <- trees_with_districts |>
+  st_drop_geometry() |>
+  filter(!is.na(coun_dist)) |>
+  count(coun_dist, name = "num_trees") |>
+  left_join(
+    council_districts |> 
+      st_drop_geometry() |> 
+      select(coun_dist, shape_area),
+    by = "coun_dist"
+  ) |>
+  mutate(tree_density = num_trees / shape_area) |>
+  arrange(desc(tree_density)) |>
+  slice(1)
+
+q2_tree_density
+```
+
+3)  Which district has highest fraction of dead trees?
+
+```{r}
+
+
+# Based on your data, use tpstructure column
+# "Retired" likely means dead/removed trees
+
+q3_dead_trees <- trees_with_districts |>
+  st_drop_geometry() |>
+  filter(!is.na(coun_dist)) |>
+  group_by(coun_dist) |>
+  summarise(
+    total_trees = n(),
+    # Use tpstructure == "Retired" or "Stump" for dead trees
+    retired_trees = sum(tpstructure %in% c("Retired", "Stump"), na.rm = TRUE),
+    fraction_retired = retired_trees / total_trees,
+    .groups = "drop"
+  ) |>
+  arrange(desc(fraction_retired)) |>
+  slice(1)
+
+q3_dead_trees
+```
+
+4)  What is the most common tree species in Manhattan?
+
+```{r}
+
+
+
+cat("Checking for species columns:\n")
+names(trees_with_districts)[grep("species|common|genus", names(trees_with_districts), ignore.case = TRUE)]
+
+
+# Let's check unique values
+cat("\nSample species names:\n")
+trees_with_districts |>
+  st_drop_geometry() |>
+  pull(genusspecies) |>
+  head(10)
+
+# Add borough column based on council district
+trees_with_borough <- trees_with_districts |>
+  mutate(
+    borough = case_when(
+      coun_dist >= 1 & coun_dist <= 10 ~ "Manhattan",
+      coun_dist >= 11 & coun_dist <= 18 ~ "Bronx",
+      coun_dist >= 19 & coun_dist <= 32 ~ "Queens",
+      coun_dist >= 33 & coun_dist <= 48 ~ "Brooklyn",
+      coun_dist >= 49 & coun_dist <= 51 ~ "Staten Island",
+      TRUE ~ NA_character_
+    )
+  )
+
+# Verify the borough assignment worked
+cat("\nTrees by borough:\n")
+trees_with_borough |>
+  st_drop_geometry() |>
+  count(borough, sort = TRUE)
+
+# Find most common species in Manhattan using genusspecies column
+q4_manhattan_species <- trees_with_borough |>
+  st_drop_geometry() |>
+  filter(borough == "Manhattan", !is.na(genusspecies)) |>
+  count(genusspecies, sort = TRUE) |>
+  slice(1)
+
+
+q4_manhattan_species
+
+
+```
+
+5)  What is the species of the tree closest to Baruch’s campus?
+
+```{r}
+# ============================================================================
+# Question 5: Species of tree closest to Baruch's campus?
+# ============================================================================
+
+library(sf)
+library(dplyr)
+
+# Helper function to create a spatial point
+new_st_point <- function(lat, lon, ...){
+  # st_sfc expects x, y which flips the normal lat (N/S) + lon (W/E) ordering
+  st_sfc(st_point(c(lon, lat))) |>
+    st_set_crs("WGS84")
+}
+
+# Baruch College coordinates
+# Address: 55 Lexington Ave (at 24th St), New York, NY 10010
+# Latitude: 40.7403, Longitude: -73.9830
+baruch_location <- new_st_point(lat = 40.7403, lon = -73.9830)
+
+# Verify the point was created correctly
+cat("Baruch location created:\n")
+print(baruch_location)
+
+# Make sure trees geometry is valid and in WGS84
+trees_clean <- trees |>
+  filter(!st_is_empty(geometry)) |>
+  st_transform(crs = 4326)  # Ensure WGS84
+
+# Find the tree closest to Baruch
+q5_closest_tree <- trees_clean |>
+  mutate(distance_m = as.numeric(st_distance(geometry, baruch_location))) |>
+  arrange(distance_m) |>
+  slice(1) |>
+  st_drop_geometry() |>
+  select(genusspecies, tpcondition, dbh, distance_m)
+
+q5_closest_tree
+
+
+```
+
+# Task 5: NYC Parks Proposal
+
+I will be analyzing all the data that is needed for this proposal.
+
+```{r}
+# ============================================================================
+# Task 5: NYC Parks Proposal - District Tree Program
+# ============================================================================
+
+library(tidyverse)
+library(sf)
+library(scales)
+
+# ============================================================================
+# STEP 1: Choose Your District
+# ============================================================================
+
+# Choose one of these options:
+# Option 1: Baruch's district (District 2 - Manhattan)
+my_district <- 2
+
+# Option 2: Your district (replace with your district number)
+# my_district <- XX
+
+# Get your district data
+my_district_boundary <- council_districts |>
+  filter(coun_dist == my_district)
+
+# Get trees in your district
+my_district_trees <- trees_with_districts |>
+  filter(coun_dist == my_district)
+
+```
+
+```{r}
+# ============================================================================
+# STEP 2: Choose Your Project Focus
+# ============================================================================
+
+# Example: Replace Dead/Retired Trees and Stumps
+# Count trees by structure type
+tree_structure_summary <- my_district_trees |>
+  st_drop_geometry() |>
+  count(tpstructure, sort = TRUE)
+
+print(tree_structure_summary)
+
+# Count stumps and retired trees
+stumps_count <- my_district_trees |>
+  st_drop_geometry() |>
+  filter(tpstructure %in% c("Stump", "Retired")) |>
+  nrow()
+
+cat("\nStumps and retired trees in your district:", stumps_count, "\n")
+```
+
+```{r}
+# ============================================================================
+# STEP 3: Quantitative Scope Statement
+# ============================================================================
+
+# Calculate project scope
+project_scope <- my_district_trees |>
+  st_drop_geometry() |>
+  summarise(
+    total_trees = n(),
+    stumps = sum(tpstructure == "Stump", na.rm = TRUE),
+    retired = sum(tpstructure == "Retired", na.rm = TRUE),
+    poor_condition = sum(tpcondition == "Poor", na.rm = TRUE),
+    to_replace = stumps + retired
+  )
+
+cat("\nProject Scope:\n")
+print(project_scope)
+```
+
+```{r}
+# ============================================================================
+# STEP 4: Zoomed-in Map of Your District
+# ============================================================================
+
+# Map showing all trees in your district
+map_my_district <- ggplot() +
+  # District boundary
+  geom_sf(data = my_district_boundary, 
+          fill = "lightgray", 
+          color = "black", 
+          linewidth = 1.5) +
+  
+  # All trees
+  geom_sf(data = my_district_trees,
+          aes(color = tpstructure),
+          size = 0.5,
+          alpha = 0.6) +
+  
+  scale_color_manual(
+    name = "Tree Status",
+    values = c("Full" = "darkgreen", 
+               "Retired" = "orange", 
+               "Stump" = "red")
+  ) +
+  
+  theme_minimal() +
+  labs(
+    title = paste("Trees in Council District", my_district),
+    subtitle = paste(format(nrow(my_district_trees), big.mark = ","), "total trees")
+  ) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "bottom"
+  )
+
+print(map_my_district)
+
+# Alternative: Map showing only stumps and retired trees
+map_replacement_targets <- ggplot() +
+  geom_sf(data = my_district_boundary, 
+          fill = "white", 
+          color = "black", 
+          linewidth = 1.5) +
+  
+  # Only stumps and retired trees
+  geom_sf(data = my_district_trees |> 
+            filter(tpstructure %in% c("Stump", "Retired")),
+          aes(color = tpstructure),
+          size = 1,
+          alpha = 0.7) +
+  
+  scale_color_manual(
+    name = "Replacement Needed",
+    values = c("Retired" = "orange", "Stump" = "red")
+  ) +
+  
+  theme_minimal() +
+  labs(
+    title = paste("Trees to Replace in District", my_district),
+    subtitle = paste(stumps_count, "stumps and retired trees")
+  ) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "bottom"
+  )
+
+print(map_replacement_targets)
+```
+
+```{r}
+# ============================================================================
+# STEP 5: Compare to Other Districts
+# ============================================================================
+
+# Compare stumps/retired trees across districts
+district_comparison <- trees_with_districts |>
+  st_drop_geometry() |>
+  filter(!is.na(coun_dist)) |>
+  group_by(coun_dist) |>
+  summarise(
+    total_trees = n(),
+    stumps_retired = sum(tpstructure %in% c("Stump", "Retired"), na.rm = TRUE),
+    percent_need_replacement = (stumps_retired / total_trees) * 100,
+    .groups = "drop"
+  ) |>
+  arrange(desc(stumps_retired))
+
+# Get your district's rank
+my_district_rank <- district_comparison |>
+  mutate(rank = row_number()) |>
+  filter(coun_dist == my_district)
+
+cat("\nYour district ranks #", my_district_rank$rank, 
+    "in number of stumps/retired trees\n")
+
+# Top 10 districts needing replacement
+cat("\nTop 10 Districts Needing Tree Replacement:\n")
+print(head(district_comparison, 10))
+```
+
+```{r}
+# ============================================================================
+# STEP 6: Non-Map Graphic (Bar Chart)
+# ============================================================================
+
+# Select districts to compare (your district + 3-4 others)
+districts_to_compare <- c(my_district, 1, 3, 5)  # Adjust as needed
+
+comparison_data <- district_comparison |>
+  filter(coun_dist %in% districts_to_compare) |>
+  mutate(
+    is_my_district = coun_dist == my_district,
+    district_label = paste("District", coun_dist)
+  )
+
+# Bar chart comparing stumps/retired trees
+bar_chart_comparison <- ggplot(comparison_data, 
+                                aes(x = reorder(district_label, -stumps_retired),
+                                    y = stumps_retired,
+                                    fill = is_my_district)) +
+  geom_col() +
+  geom_text(aes(label = comma(stumps_retired)), 
+            vjust = -0.5, 
+            size = 4) +
+  scale_fill_manual(
+    values = c("TRUE" = "#E74C3C", "FALSE" = "gray70"),
+    guide = "none"
+  ) +
+  theme_minimal() +
+  labs(
+    title = "Trees Needing Replacement by District",
+    subtitle = "Stumps and Retired Trees",
+    x = "Council District",
+    y = "Number of Trees"
+  ) +
+  theme(
+    plot.title = element_text(face = "bold", size = 14),
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+print(bar_chart_comparison)
+```
+
+```{r}
+# ============================================================================
+# STEP 7: Map Comparison with Other Districts
+# ============================================================================
+
+# Compare your district with nearby districts
+comparison_districts <- c(my_district, 1, 3, 5)  # Adjust as needed
+
+comparison_boundaries <- council_districts |>
+  filter(coun_dist %in% comparison_districts)
+
+comparison_trees <- trees_with_districts |>
+  filter(coun_dist %in% comparison_districts,
+         tpstructure %in% c("Stump", "Retired"))
+
+map_district_comparison <- ggplot() +
+  geom_sf(data = comparison_boundaries,
+          aes(fill = factor(coun_dist)),
+          alpha = 0.3,
+          color = "black",
+          linewidth = 0.8) +
+  
+  geom_sf(data = comparison_trees,
+          color = "red",
+          size = 0.3,
+          alpha = 0.5) +
+  
+  scale_fill_brewer(
+    name = "Council District",
+    palette = "Set2"
+  ) +
+  
+  theme_minimal() +
+  labs(
+    title = "Tree Replacement Needs: District Comparison",
+    subtitle = "Red points show stumps and retired trees"
+  ) +
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.grid = element_blank()
+  )
+
+print(map_district_comparison)
+```
+
+```{r}
+# ============================================================================
+# STEP 8: Summary Statistics for Proposal
+# ============================================================================
+
+cat("\n========================================\n")
+cat("PROPOSAL SUMMARY STATISTICS\n")
+cat("========================================\n\n")
+
+cat("District:", my_district, "\n")
+cat("Total trees:", format(project_scope$total_trees, big.mark = ","), "\n")
+cat("Stumps:", format(project_scope$stumps, big.mark = ","), "\n")
+cat("Retired trees:", format(project_scope$retired, big.mark = ","), "\n")
+cat("Trees in poor condition:", format(project_scope$poor_condition, big.mark = ","), "\n")
+cat("Total replacement needed:", format(project_scope$to_replace, big.mark = ","), "\n\n")
+
+cat("Comparison with other districts:\n")
+comparison_data |>
+  arrange(desc(stumps_retired)) |>
+  select(coun_dist, stumps_retired, percent_need_replacement) |>
+  print()
+
+cat("\n========================================\n")
+```
+
+# Proposal :
+
+Tree Replacement Initiative — Council District 2 As a Council Member
+representing District 2 (Gramercy, Kips Bay, Murray Hill), I propose a
+tree replacement program to address our district's critical tree
+maintenance needs.
+
+🌿 Project: "ReGrow District 2" The Problem: District 2 has 11,563
+trees, but 2,691 trees (23.3%) are dead, retired, or stumps—the highest
+replacement rate among neighboring Manhattan districts. The Solution:
+Remove stumps, replace dead trees, and plant new climate-resilient
+species
+
+Why District 2? District 2 stands out with 23.3% of trees needing
+replacement—higher than Districts 1 (22.8%), 3 (21.2%), and 5 (20.5%).
+While District 1 has more trees overall, District 2 has the highest
+percentage requiring replacement, making it the most urgent priority for
+intervention. Our 2,691 trees needing replacement include: 328 dangerous
+stumps (tripping hazards) 2,363 retired/dead trees (providing no
+environmental benefit)
+
+Project Scope Proposed Actions: Remove 328 dangerous stumps Replace
+2,363 retired/dead trees Plant 500 NEW trees in underserved blocks
+Maintain 291 trees in poor condition Total Impact: 3,482 tree
+interventions Timeline: 18 months Budget: \$1.5M (\$430 per tree)
+
+🗺️ Visualizations Map 1: Distribution of 11,563 trees in District 2 by
+condition Chart 2: District 2 has highest replacement needs compared to
+Districts 1, 3, 5 Map 3: Red points show 2,691 stumps and retired trees
+requiring immediate action.
+
+✅ Expected Outcomes Improved air quality and reduced heat island effect
+Enhanced public safety by removing 328 hazardous stumps Expanded tree
+canopy with 500 new plantings Healthier urban forest serving 150,000+
+residents Request: \$1.5M Parks Department allocation for District 2
+tree revitalization.
+

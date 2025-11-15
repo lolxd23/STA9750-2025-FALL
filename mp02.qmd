@@ -617,7 +617,7 @@ ggplot(household_size_data, aes(
 
 The spaghetti plot displays the evolution of average household size across hundreds of US metropolitan areas from 2009 to 2023, with each colored line representing a different CBSA, revealing substantial variation in household composition ranging from approximately 2.0 to 3.5 persons per household. The majority of metros cluster between 2.5 and 3.0 persons per household, showing relatively stable trends over time with a slight general decline toward 2023, reflecting broader demographic shifts toward smaller household sizes driven by factors such as aging populations, delayed family formation, and increased single-person households. Notable outliers at the top of the chart (household sizes above 3.25) likely represent metros with higher birth rates, multi-generational living arrangements, or immigrant populations, while the gap in 2020 (visible as a horizontal discontinuity in the lines) reflects the absence of ACS data collection during the COVID-19 pandemic.
 
-## ***Extra credit 2:*** 
+## ***Extra credit 2:***
 
 ```{r}
 # Load gghighlight
@@ -1215,7 +1215,7 @@ affordability_data |>
 
 ```
 
-::: {.callout-note icon=false}
+::: {.callout-note icon="false"}
 ## Policy Brief
 
 **FEDERAL YIMBY HOUSING INITIATIVE - POLICY BRIEF**

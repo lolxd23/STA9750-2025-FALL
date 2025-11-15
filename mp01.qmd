@@ -53,7 +53,7 @@ GLOBAL_TOP_10 <- GLOBAL_TOP_10 |>
 glimpse(GLOBAL_TOP_10)
 ```
 
-# Task 3: Data Import 
+# Task 3: Data Import
 
 ```{r}
 COUNTRY_TOP_10 <- read_tsv(COUNTRY_TOP_10_FILENAME, na = "N/A")
