@@ -144,64 +144,107 @@ glimpse(trees_sf)
 ## Data Integration and Initial Exploration
 
 ```{r}
-## TASK 3: PLOT ALL TREE POINTS 
 
+#| label: load-data
 #| message: false
 #| warning: false
+
+library(tidyverse)
+library(sf)
+library(httr2)
+
+# Load council districts from already downloaded files
+council_districts <- st_read("data/mp03/geo_export_0231ea95-571c-48c6-869c-a4f70a7fa223.shp", quiet = TRUE) |>
+  st_transform(crs = "WGS84")
+
+# Load trees from already downloaded files
+tree_files <- list.files("data/mp03/trees", pattern = "\\.geojson$", full.names = TRUE)
+
+all_trees <- lapply(tree_files, function(f) {
+  df <- st_read(f, quiet = TRUE)
+  geom_col <- attr(df, "sf_column")
+  char_cols <- setdiff(names(df), geom_col)
+  for (col in char_cols) df[[col]] <- as.character(df[[col]])
+  return(df)
+})
+
+trees <- bind_rows(all_trees)
+
+# Convert to proper data types
+if ("planteddate" %in% names(trees)) {
+  trees$planteddate <- as.POSIXct(trees$planteddate, 
+                                   format = "%Y-%m-%dT%H:%M:%S", tz = "UTC")
+}
+
+numeric_cols <- c("dbh", "zipcode", "latitude", "longitude")
+for (col in numeric_cols) {
+  if (col %in% names(trees)) {
+    trees[[col]] <- as.numeric(trees[[col]])
+  }
+}
+
+# Create spatial join
+trees_with_districts <- st_join(trees, council_districts, join = st_intersects)
+
+cat("Loaded:", nrow(council_districts), "council districts\n")
+cat("Loaded:", format(nrow(trees), big.mark = ","), "trees\n")
+```
+
+```{r}
+## TASK 3: PLOT ALL TREE POINTS 
+#| label: task3-plot-trees
+#| message: false
+#| warning: false
+#| fig-width: 10
+#| fig-height: 8
 
 library(ggplot2)
 library(dplyr)
 library(sf)
 
-plot_trees <- function(tree_data, council_data, n_trees = 10000) {
-  # Ensure both are in same CRS
-  council_simplified <- council_data %>% 
-    st_transform(crs = "WGS84") %>%
-    mutate(geometry = st_simplify(geometry, dTolerance = 5))
-  
-  tree_data <- st_transform(tree_data, crs = "WGS84")
-  
-  # Sample trees
-  if (n_trees < nrow(tree_data)) {
-    set.seed(123)
-    trees_sample <- tree_data %>% slice_sample(n = n_trees)
-  } else {
-    trees_sample <- tree_data
-  }
-  
-  ggplot() +
-    geom_sf(data = council_simplified, 
-            fill = "white", 
-            color = "gray20", 
-            linewidth = 0.3) +
-    geom_sf(data = trees_sample,
-            color = "forestgreen", 
-            alpha = 0.3, 
-            size = 0.8) +
-    labs(
-      title = paste("NYC Tree Map (", format(n_trees, big.mark=","), " Trees)", sep=""),
-      subtitle = "Overlay on City Council Districts",
-      caption = "Data: NYC OpenData & NYC Planning"
-    ) +
-    theme_minimal() +
-    theme(
-      plot.title = element_text(face = "bold", size = 16),
-      plot.subtitle = element_text(size = 12),
-      panel.background = element_rect(fill = "white"),
-      panel.grid = element_line(color = "gray95")
-    )
-}
-  
-```
+# Simplify council districts for faster plotting
+council_simplified <- council_districts %>% 
+  st_transform(crs = "WGS84") %>%
+  mutate(geometry = st_simplify(geometry, dTolerance = 5))
 
-```{r}
-plot_trees(trees_sf, council, n_trees = 5000)
+# Transform trees to WGS84
+trees_wgs84 <- st_transform(trees, crs = "WGS84")
 
+# Sample trees for performance (use 50,000 for better visualization)
+set.seed(123)
+trees_sample <- trees_wgs84 %>% 
+  slice_sample(n = 50000)
+
+# Create the plot
+ggplot() +
+  geom_sf(data = council_simplified, 
+          fill = "white", 
+          color = "gray20", 
+          linewidth = 0.3) +
+  geom_sf(data = trees_sample,
+          color = "forestgreen", 
+          alpha = 0.3, 
+          size = 0.5) +
+  labs(
+    title = paste("NYC Tree Map (", format(nrow(trees_sample), big.mark=","), " Trees)"),
+    subtitle = "Overlay on City Council Districts",
+    caption = "Data: NYC OpenData & NYC Planning"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12),
+    panel.background = element_rect(fill = "white"),
+    panel.grid = element_line(color = "gray95"),
+    axis.text = element_blank(),
+    axis.title = element_blank()
+  )
+  
 ```
 
 Above is a visual of the NYC Council Districts.
 
-## Extra credit 1 - Visualization 
+## Extra credit 1 - Visualization
 
 ```{r}
 # First, check if have the required objects
