@@ -38,6 +38,9 @@ Data Preparation
 library(tidyverse)
 library(sf)
 library(httr2)
+#| message: false
+#| warning: false
+#| output: false
 ```
 
 # Task 1: Download NYC City Council District Boundaries
@@ -79,64 +82,126 @@ council <- NYC_City_Council("https://s-media.nyc.gov/agencies/dcp/assets/files/z
 # Task 2: Download Tree Points
 
 ```{r}
+
+#| label: download-tree-data
+#| include: false
+#| cache: true
+
 library(httr2)
 library(sf)
 library(dplyr)
-library(purrr)
-library(jsonlite)
 
-download_tree_points <- function(limit = 50000) {
-  # Create folder if needed
-  dir.create("data/mp03", showWarnings = FALSE, recursive = TRUE)
+# Function to download NYC Tree Points using httr2
+download_tree_points <- function(
+  base_url = "https://data.cityofnewyork.us/resource/hn5i-inap.geojson",
+  limit = 5000,
+  data_dir = "data/mp03/trees",
+  pause = 1
+) {
   
-  # Correct NYC Tree Census API - use JSON not GeoJSON
-  base_url <- "https://data.cityofnewyork.us/resource/nwxe-4ae8.json"
-  
-  offset <- 0
-  all_data <- list()
-  
-  repeat {
-    message(paste("Downloading records", offset, "to", offset + limit, "..."))
-    
-    req <- request(base_url) |>
-      req_url_query(`$limit` = limit, `$offset` = offset)
-    
-    resp <- req_perform(req)
-    data_chunk <- resp_body_json(resp, simplifyVector = TRUE)
-    
-    # Stop if no more data
-    if (nrow(data_chunk) == 0) break
-    
-    all_data[[length(all_data) + 1]] <- data_chunk
-    
-    # Stop if fewer than limit rows
-    if (nrow(data_chunk) < limit) break
-    
-    offset <- offset + limit
+  # Create trees directory if it doesn't exist
+  if (!dir.exists(data_dir)) {
+    dir.create(data_dir, recursive = TRUE)
+    message("Created directory: ", data_dir)
   }
   
-  # Combine all chunks
-  message("Combining all downloaded data...")
-  tree_data <- bind_rows(all_data)
+  files <- character()
+  offset <- 0L
+  page <- 1L
   
-  message(paste("Total trees loaded:", nrow(tree_data)))
+  message("Downloading NYC Tree Points data...")
   
-  return(tree_data)
+  repeat {
+    # Construct filename with consistent naming schema
+    fname <- file.path(data_dir, sprintf("treepoints_%08d_%05d.geojson", offset, limit))
+    
+    # Only download if file doesn't exist
+    if (!file.exists(fname)) {
+      message("Downloading page ", page, " (offset: ", offset, ")...")
+      
+      # Build request using httr2
+      req <- request(base_url) |>
+        req_url_query(
+          `$limit`  = limit,
+          `$offset` = offset
+        ) |>
+        req_timeout(300) |>
+        req_retry(max_tries = 3)
+      
+      # Perform request
+      resp <- req_perform(req)
+      writeBin(resp_body_raw(resp), fname)
+      message("  Saved to: ", basename(fname))
+      Sys.sleep(pause)  # Be respectful to the API
+      
+    } else {
+      message("Page ", page, " already exists, skipping")
+    }
+    
+    # Read the file to check how many records we got
+    trees_page <- try(st_read(fname, quiet = TRUE), silent = TRUE)
+    nret <- if (inherits(trees_page, "sf")) nrow(trees_page) else 0L
+    
+    message("  Page ", page, " contains ", nret, " records")
+    files <- c(files, fname)
+    
+    # If we got fewer records than limit, we've reached the end
+    if (nret < limit) {
+      message("\nReached end of dataset at page ", page)
+      break
+    }
+    
+    offset <- offset + limit
+    page <- page + 1L
+  }
+  
+  # Read all GeoJSON files using st_read
+  message("\nReading and combining ", length(files), " GeoJSON files...")
+  
+  all_trees <- lapply(files, function(f) {
+    df <- st_read(f, quiet = TRUE)
+    
+    # Convert all columns to character except geometry
+    geom_col <- attr(df, "sf_column")
+    char_cols <- setdiff(names(df), geom_col)
+    
+    for (col in char_cols) {
+      df[[col]] <- as.character(df[[col]])
+    }
+    
+    return(df)
+  })
+  
+  # Combine all datasets using bind_rows
+  trees_combined <- bind_rows(all_trees)
+  
+  # Convert columns to proper types
+  if ("planteddate" %in% names(trees_combined)) {
+    trees_combined$planteddate <- as.POSIXct(
+      trees_combined$planteddate,
+      format = "%Y-%m-%dT%H:%M:%S",
+      tz = "UTC"
+    )
+  }
+  
+  numeric_cols <- c("tree_dbh", "dbh", "stump_diam", "zipcode", 
+                    "latitude", "longitude", "council_district", "census_tract")
+  for (col in numeric_cols) {
+    if (col %in% names(trees_combined)) {
+      trees_combined[[col]] <- as.numeric(trees_combined[[col]])
+    }
+  }
+  
+  message("Download and combination complete!")
+  message("Total records: ", format(nrow(trees_combined), big.mark = ","))
+  
+  return(trees_combined)
 }
 
-# Download the data
-trees_raw <- download_tree_points(limit = 50000)
+# Download the tree data (or read from cache)
+trees <- download_tree_points(limit = 5000, pause = 1)
 
-# Convert to sf object with proper geometry
-trees_sf <- trees_raw %>%
-  filter(!is.na(latitude) & !is.na(longitude)) %>%
-  st_as_sf(coords = c("longitude", "latitude"), crs = 4326) %>%
-  st_transform(crs = "WGS84")
 
-# Verify it worked
-cat("Trees downloaded:", nrow(trees_sf), "\n")
-cat("Geometry type:", paste(unique(st_geometry_type(trees_sf)), collapse=", "), "\n")
-glimpse(trees_sf)
 ```
 
 # Task 3: Plot All Tree Points
@@ -483,7 +548,14 @@ The most common tree species is honeylocust.
 5.  What is the species of the tree closest to Baruch’s campus?
 
 ```{r}
+
+#| label: baruch-closest-tree
+#| message: false
+#| warning: false
+
 library(knitr)
+library(sf)
+library(dplyr)
 
 # Create helper function for point creation
 new_st_point <- function(lon, lat) {
@@ -494,8 +566,11 @@ new_st_point <- function(lon, lat) {
 # Baruch College coordinates (Lexington Ave & E 24th St)
 baruch_point <- new_st_point(-73.9838, 40.7402)
 
+# Make sure trees are in WGS84
+trees_wgs84 <- st_transform(trees, crs = "WGS84")
+
 # Calculate distance from each tree to Baruch
-trees_with_distance <- trees_sf %>%
+trees_with_distance <- trees_wgs84 %>%
   mutate(distance = st_distance(geometry, baruch_point))
 
 # Show TOP 5 closest trees
@@ -503,16 +578,17 @@ top_5_closest <- trees_with_distance %>%
   arrange(distance) %>%
   slice(1:5) %>%
   st_drop_geometry() %>%
-  select(spc_common, address, distance) %>%
+  select(genusspecies, distance) %>%  # Changed from spc_common
   mutate(distance_m = round(as.numeric(distance), 1)) %>%
-  select(spc_common, address, distance_m)
+  select(genusspecies, distance_m)
 
 top_5_closest %>%
   kable(
-    col.names = c("Tree Species", "Address", "Distance (m)"),
+    col.names = c("Tree Species", "Distance (meters)"),
     caption = "Top 5 Trees Closest to Baruch College Campus",
-    align = c("l", "l", "c")
+    align = c("l", "c")
   )
+
 
 
 ```
