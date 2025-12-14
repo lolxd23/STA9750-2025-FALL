@@ -1,0 +1,228 @@
+---
+title: "SoundCloud Analyis"
+author: Hajara Muzammal
+format: 
+  html:
+    code-fold: true
+    code-summary: "Show code"
+    toc: true
+    toc-depth: 3
+    theme: cosmo
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+editor: 
+  markdown: 
+    wrap: 72
+---
+
+# **Introduction:**
+
+Music streaming platforms shape how listeners discover and consume
+music. While most large-scale analyses focus on Spotify or Billboard
+charts, SoundCloud plays a unique role by amplifying emerging artists,
+remixes, and niche genres.
+
+In this project, we analyze a dataset of playlist tracks that includes
+direct SoundCloud links, playlist metadata, and audio features. Our goal
+is to understand:
+
+**What musical characteristics are associated with popular songs?**
+
+**How playlist inclusion relates to popularity**
+
+**Trends in danceability, tempo, key, and track length**
+
+By combining playlist-level data with song-level attributes, we explore
+patterns that define what makes songs more likely to appear in curated
+playlists.
+
+# **Data Ingest**
+
+We use a publicly available dataset hosted on Hugging Face, which
+contains playlist metadata, song characteristics, and direct SoundCloud
+links.
+
+```{r}
+library(readr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+url <- "https://huggingface.co/datasets/Zuru7/Spotify_Songs_with_SoundCloud_links/resolve/main/song_df_normalised.csv"
+
+SONGS <- read_csv(url, show_col_types = FALSE)
+glimpse(SONGS)
+```
+
+Rows: 14,987 Columns: 23 Includes audio features (danceability, energy,
+valence, tempo), playlist info, popularity, and SoundCloud links.
+
+# **Data Cleaning**
+
+Rename columns for consistency
+
+```{r}
+SONGS <- SONGS %>%
+  rename(
+    track        = track_name,
+    artist       = track_artist,
+    album        = track_album_name,
+    popularity   = track_popularity,
+    genre        = playlist_genre,
+    subgenre     = playlist_subgenre,
+    soundcloud   = links
+  )
+```
+
+Remove missing or invalid rows
+
+```{r}
+SONGS <- SONGS %>%
+  filter(
+    !is.na(track),
+    !is.na(artist),
+    !is.na(popularity)
+  )
+```
+
+# **Data Integration**
+
+```{r}
+PLAYLIST_TABLE <- SONGS %>%
+  mutate(
+    playlist_id = as.integer(as.factor(playlist_name)),
+    track_id    = as.integer(as.factor(paste(track, artist))),
+    artist_id   = as.integer(as.factor(artist)),
+    album_id    = as.integer(as.factor(album))
+  ) %>%
+  select(
+    playlist_name,
+    playlist_id,
+    artist,
+    artist_id,
+    track,
+    track_id,
+    album,
+    album_id,
+    popularity,
+    danceability,
+    energy,
+    valence,
+    tempo,
+    soundcloud
+  )
+
+```
+
+# **Data Exploration**
+
+W define a "popular song" as one with a popularity that is greater than
+or equal to 70.
+
+```{r}
+pop_threshold <- 70
+print(pop_threshold)
+```
+
+## *Popularity vs Playlist Appearances*
+
+```{r}
+track_counts <- PLAYLIST_TABLE %>%
+  count(track, popularity)
+
+ggplot(track_counts, aes(popularity, n)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Popularity vs Playlist Appearances",
+    x = "Track Popularity",
+    y = "Number of Playlist Appearances"
+  ) +
+  theme_minimal()
+print(track_counts)
+```
+This plot shows a weak relationship between track popularity and the number of playlist appearances, with most tracks appearing in only one playlist regardless of popularity score. While a small number of moderately to highly popular tracks appear in multiple playlists, overall playlist inclusion does not strongly increase with popularity in this dataset.
+
+## ***Most danceable songs***
+
+```{r}
+SONGS %>%
+  arrange(desc(danceability)) %>%
+  select(track, artist, danceability, soundcloud) %>%
+  head(5)
+
+```
+The number one danceable track is ice ice baby.
+## ***Danceability vs Popularity***
+
+```{r}
+ggplot(SONGS, aes(danceability, popularity)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Danceability vs Popularity",
+    x = "Danceability",
+    y = "Popularity"
+  ) +
+  theme_minimal()
+
+```
+
+This plot shows a weak but positive relationship between danceability and track popularity, indicating that more danceable songs tend to be slightly more popular on average. However, the wide dispersion of points suggests that danceability alone is not a strong predictor of popularity, and highly popular songs exist across a broad range of danceability values
+
+## ***Energy Distribution of Popular Songs***
+
+```{r}
+SONGS %>%
+  filter(popularity >= pop_threshold) %>%
+  ggplot(aes(energy)) +
+  geom_histogram(bins = 30, fill = "steelblue") +
+  labs(
+    title = "Energy Distribution of Popular Songs",
+    x = "Energy",
+    y = "Count"
+  ) +
+  theme_minimal()
+
+```
+The distribution of energy among popular songs is skewed toward higher values, with most tracks clustered between moderate and high energy levels. This indicates that energetic songs are more commonly represented among popular tracks
+## ***Valence (Mood) of Popular Songs***
+
+```{r}
+SONGS %>%
+  filter(popularity >= pop_threshold) %>%
+  ggplot(aes(valence)) +
+  geom_density(fill = "darkorange", alpha = 0.6) +
+  labs(
+    title = "Mood (Valence) of Popular Songs",
+    x = "Valence",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+
+```
+
+The density plot shows that popular songs tend to have mid-to-high valence, indicating generally positive or upbeat emotional tones. Extremely low-valence (sad) songs are less common among the most popular tracks
+
+## ***Tempo vs Popularity***
+
+```{r}
+ggplot(SONGS, aes(tempo, popularity)) +
+  geom_point(alpha = 0.3) +
+  geom_smooth(method = "loess", se = FALSE) +
+  labs(
+    title = "Tempo vs Popularity",
+    x = "Tempo",
+    y = "Popularity"
+  ) +
+  theme_minimal()
+
+```
+The relationship between tempo and popularity appears weak and non-linear, with popularity remaining relatively stable across most tempo values. This suggests that tempo alone does not strongly influence a song’s popularity on playlists.
+
+# **Conclusion:**
+
+Overall, the analysis suggests that while playlist exposure and audio features are related to popularity, no single characteristic fully explains why a song becomes popular on SoundCloud-linked Spotify playlists. Playlist appearances show only a weak relationship with track popularity, indicating that many popular tracks appear in relatively few playlists, while less popular tracks can still circulate widely. Danceability and tempo exhibit mild positive associations with popularity, implying that more rhythmically engaging songs tend to perform slightly better, though the effect is not strong. Popular songs are also concentrated at moderate-to-high energy levels and generally exhibit balanced valence, suggesting that listeners gravitate toward songs that are energetic but emotionally neutral to positive rather than extremely sad or euphoric. Taken together, these findings highlight that popularity is multifaceted: audio features contribute to success, but playlist dynamics, listener behavior, and external factors likely play an equally important role in shaping which songs gain widespread attention.
