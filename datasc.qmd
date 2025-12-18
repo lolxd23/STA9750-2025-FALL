@@ -320,7 +320,7 @@ dynamics rather than simple playlist exposure alone, highlighting the
 multifaceted nature of music consumption and discovery across streaming
 platforms
 
-**Future Work**
+# **Future Work**
 
 There are several ways this project could be extended to more fully
 address the factors that influence song popularity. First, incorporating
