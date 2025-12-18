@@ -79,13 +79,18 @@ glimpse(SONGS)
 
 ```
 
-The dataset contains 14,987 observations and 23 variables, including
-track-level metadata, playlist context, sentiment labels, and normalized
-audio features such as danceability, energy, and valence. Each
-observation represents a song associated with at least one playlist and
-includes a direct SoundCloud link.
+The dataset used in this analysis was obtained from Hugging Face and
+contains Spotify song metadata linked to SoundCloud URLs. This dataset
+is appropriate because it combines popularity metrics, playlist
+information, and detailed audio features while also enabling direct
+reference to SoundCloud content. The dataset consists of 14,987
+observations and 23 variables, including track-level metadata, playlist
+attributes, audio features, sentiment labels, and SoundCloud links,
+making it well-suited for exploratory analysis of music popularity
 
 # **Data Cleaning**
+
+Now lets clean the data.
 
 ```{r}
 PLAYLIST_TABLE <- SONGS %>%
@@ -108,19 +113,21 @@ glimpse(PLAYLIST_TABLE)
 
 ```
 
-Here we cleaned the dataset by first removing any tracks with missing
-popularity values to ensure that all subsequent analyses were based on
-complete and comparable observations. I then defined a threshold for
-popularity using the 75th percentile of the popularity distribution,
-which provides a data-driven way to distinguish more popular songs from
-the rest of the catalog. Finally, I created a binary indicator variable
-(`is_popular`) that labels each track as popular or not, allowing for
-clearer comparisons between popular and less popular songs in later
-visualizations and analyses
+After initial ingestion, the dataset was cleaned to focus on variables
+most relevant to playlist behavior and song popularity. The cleaned
+table contains 14,987 observations and 8 key variables, including
+playlist name, artist name, track name, album name, popularity score,
+playlist genre and subgenre, and a corresponding SoundCloud link. Tracks
+with missing popularity values were removed to ensure consistency across
+analyses, allowing all visualizations and comparisons to rely on
+complete and comparable observations. This streamlined structure
+provides a balanced combination of playlist context, song metadata, and
+platform linkage, making it well-suited for exploratory analysis of how
+musical characteristics and playlist placement relate to popularity.
 
 # **Data Exploration**
 
-W define a "popular song" as one with a popularity that is greater than
+We define a "popular song" as one with a popularity that is greater than
 or equal to 70.
 
 ```{r}
@@ -133,6 +140,19 @@ track_counts <- PLAYLIST_TABLE %>%
 
 glimpse(track_counts)
 ```
+
+To better understand how song popularity relates to playlist exposure, I
+constructed a track-level summary table that aggregates playlist
+information across the dataset. Each row in this table represents a
+unique track and artist combination, along with the song’s popularity
+score and the number of playlists in which it appears. Notably, most
+tracks appear in only a single playlist regardless of their popularity
+score, indicating that playlist inclusion in this dataset is relatively
+sparse and not dominated by a small number of highly repeated songs.
+This aggregation allows for direct comparison between popularity and
+playlist appearances and serves as the foundation for subsequent visual
+analyses examining whether more popular songs tend to receive greater
+playlist exposure
 
 ## *Popularity vs Playlist Appearances*
 
@@ -152,12 +172,13 @@ ggplot(track_counts, aes(x = popularity, y = playlist_appearances)) +
 
 ```
 
-This plot shows a weak relationship between track popularity and the
-number of playlist appearances, with most tracks appearing in only one
-playlist regardless of popularity score. While a small number of
-moderately to highly popular tracks appear in multiple playlists,
-overall playlist inclusion does not strongly increase with popularity in
-this dataset.
+This plot shows the relationship between track popularity and the number
+of playlist appearances in the dataset. All tracks appear exactly once
+because the SoundCloud-linked dataset represents one playlist
+association per track, meaning playlist frequency cannot vary; as a
+result, no meaningful relationship between popularity and playlist
+appearances can be inferred from this data, highlighting a structural
+limitation of the dataset rather than a musical trend
 
 ## ***Most danceable songs***
 
@@ -170,7 +191,14 @@ SONGS %>%
 
 ```
 
-The number one danceable track is ice ice baby.
+This table highlights the five most danceable songs in the dataset,
+ranked by Spotify’s danceability score. While these tracks all score
+extremely high on danceability—indicating strong rhythm and suitability
+for dancing—their popularity varies noticeably, ranging from moderately
+popular to highly popular songs. This suggests that although
+danceability contributes to a song’s appeal, it does not guarantee high
+popularity on its own, reinforcing the idea that popularity is
+influenced by multiple musical and contextual factors.
 
 \## ***Danceability vs Popularity***
 
@@ -188,12 +216,11 @@ ggplot(SONGS, aes(x = danceability, y = popularity)) +
 
 ```
 
-This plot shows a weak but positive relationship between danceability
-and track popularity, indicating that more danceable songs tend to be
-slightly more popular on average. However, the wide dispersion of points
-suggests that danceability alone is not a strong predictor of
-popularity, and highly popular songs exist across a broad range of
-danceability values
+This scatter plot reveals a weak but positive relationship between
+danceability and popularity. Although more danceable songs tend to have
+slightly higher popularity on average, the wide dispersion of points
+indicates that danceability is not a strong standalone predictor of a
+song’s popularity.
 
 ## ***Energy Distribution of Popular Songs***
 
@@ -212,10 +239,13 @@ SONGS %>%
 
 ```
 
-The distribution of energy among popular songs is skewed toward higher
-values, with most tracks clustered between moderate and high energy
-levels. This indicates that energetic songs are more commonly
-represented among popular tracks
+This histogram shows the distribution of energy levels among songs
+classified as popular (popularity ≥ 70). Most popular tracks cluster in
+the moderate-to-high energy range, particularly between 0.5 and 0.8,
+indicating a preference for energetic but not extreme compositions. Very
+low-energy tracks are relatively rare among popular songs, suggesting
+that higher energy may be a common characteristic of broadly appealing
+music.
 
 \## ***Valence (Mood) of Popular Songs***
 
@@ -236,10 +266,12 @@ SONGS %>%
 
 ```
 
-The density plot shows that popular songs tend to have mid-to-high
-valence, indicating generally positive or upbeat emotional tones.
-Extremely low-valence (sad) songs are less common among the most popular
-tracks
+This density plot illustrates the emotional tone of popular songs using
+the valence measure. Popular tracks tend to have mid-range to moderately
+high valence, indicating neutral to positive emotional moods. Extremely
+low-valence (sad) songs appear less frequently among the most popular
+tracks, suggesting that upbeat or emotionally balanced songs are more
+common in popular playlists.
 
 ## ***Tempo vs Popularity***
 
@@ -260,26 +292,49 @@ ggplot(SONGS, aes(x = tempo, y = popularity)) +
 ```
 
 The relationship between tempo and popularity appears weak and
-non-linear, with popularity remaining relatively stable across most
-tempo values. This suggests that tempo alone does not strongly influence
-a song’s popularity on playlists.
+non-linear, as shown by the relatively flat smoothed trend line.
+Popularity remains fairly stable across a wide range of tempo values,
+with no clear tempo range dominating popular songs. This indicates that
+tempo alone does not play a major role in determining a track’s
+popularity.
 
 # **Conclusion:**
 
-Overall, the analysis suggests that while playlist exposure and audio
-features are related to popularity, no single characteristic fully
-explains why a song becomes popular on SoundCloud-linked Spotify
-playlists. Playlist appearances show only a weak relationship with track
-popularity, indicating that many popular tracks appear in relatively few
-playlists, while less popular tracks can still circulate widely.
-Danceability and tempo exhibit mild positive associations with
-popularity, implying that more rhythmically engaging songs tend to
-perform slightly better, though the effect is not strong. Popular songs
-are also concentrated at moderate-to-high energy levels and generally
-exhibit balanced valence, suggesting that listeners gravitate toward
-songs that are energetic but emotionally neutral to positive rather than
-extremely sad or euphoric. Taken together, these findings highlight that
-popularity is multifaceted: audio features contribute to success, but
-playlist dynamics, listener behavior, and external factors likely play
-an equally important role in shaping which songs gain widespread
-attention.
+This analysis examined whether track popularity is associated with
+playlist inclusion in order to better understand broader factors that
+influence song popularity across major music streaming platforms. Using
+a SoundCloud-linked Spotify dataset, the results show that playlist
+inclusion alone is not a strong driver of popularity: most tracks appear
+in only one playlist regardless of their popularity score, indicating
+that playlist presence does not scale proportionally with popularity.
+While certain audio features such as danceability and energy exhibit
+weak positive relationships with popularity—suggesting that rhythmically
+engaging and moderately high-energy songs are more likely to achieve
+higher popularity—these effects are modest and highly variable. Popular
+songs also tend to cluster around mid-to-high valence levels, indicating
+a preference for emotionally positive or balanced tracks rather than
+extreme moods, while tempo shows little systematic relationship with
+popularity. Taken together, these findings suggest that song popularity
+is influenced by a combination of musical characteristics and platform
+dynamics rather than simple playlist exposure alone, highlighting the
+multifaceted nature of music consumption and discovery across streaming
+platforms
+
+**Future Work**
+
+There are several ways this project could be extended to more fully
+address the factors that influence song popularity. First, incorporating
+richer playlist data—such as playlist follower counts, track order
+within playlists, and repeated appearances across multiple
+playlists—would allow for a more nuanced analysis of how playlist
+exposure impacts popularity. Second, integrating time-based information
+(e.g., release year, time since release, or changes in popularity over
+time) could help distinguish between long-term popularity and short-term
+viral success. Additionally, expanding the dataset to include direct
+SoundCloud engagement metrics, such as likes, reposts, or comments,
+would strengthen cross-platform comparisons. Finally, future analyses
+could move beyond exploratory visualization by incorporating predictive
+models or resampling-based inference to quantify the relative importance
+of different audio features and playlist dynamics, providing deeper
+insight into the mechanisms that drive song popularity on streaming
+platforms.
