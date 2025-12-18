@@ -1,5 +1,5 @@
 ---
-title: "SoundCloud Analyis"
+title: "SoundCloud Analysis"
 author: Hajara Muzammal
 format: 
   html:
@@ -19,34 +19,41 @@ editor:
 
 # **Introduction:**
 
-Music discovery increasingly occurs through playlists, where listeners
-curate and share collections of songs across platforms such as
-SoundCloud. Understanding which musical characteristics are associated
-with popularity and playlist inclusion can provide insight into listener
-preferences and emerging trends. This analysis focuses on tracks that
-include SoundCloud links, allowing us to study how audio features,
-sentiment, and popularity metrics relate to playlist usage.
+Music streaming platforms such as Spotify and SoundCloud have
+fundamentally reshaped how listeners discover, consume, and share music.
+Rather than relying on traditional radio play or physical media, modern
+listeners increasingly engage with curated playlists, algorithmic
+recommendations, and social sharing features to explore new content. As
+a result, playlist inclusion has become a key mechanism through which
+songs gain exposure and, potentially, popularity. Understanding the
+relationship between playlist presence and track popularity is therefore
+an important step toward explaining how success is generated on
+contemporary streaming platforms.
 
-Using a dataset of approximately 15,000 tracks with audio features,
-playlist metadata, and SoundCloud URLs, this report explores the
-relationship between popularity and musical characteristics such as
-danceability, energy, tempo, and key. The goal is not to predict
-popularity with a formal statistical model, but rather to visually and
-descriptively identify patterns that distinguish popular songs from less
-popular ones.
+This project explores song popularity using a SoundCloud-linked dataset
+sourced from Hugging Face, which combines Spotify-style audio features
+with links to SoundCloud tracks. The dataset contains nearly 15,000
+songs along with detailed musical characteristics such as danceability,
+energy, valence (mood), tempo, and popularity scores. By leveraging both
+playlist metadata and audio features, this analysis aims to shed light
+on how measurable song attributes relate to broader patterns of
+popularity and exposure.
 
-This work contributes to the broader question of how music spreads
-across user-generated platforms and provides a data-driven perspective
-on what makes songs more likely to appear in playlists.
+The overarching research question guiding this analysis is: **What
+factors influence the popularity of songs across major music streaming
+platforms?** To address this broader question, the specific focus of
+this report is: **Is track popularity associated with playlist
+inclusion?** In other words, do more popular songs tend to appear in
+more playlists, and are certain musical characteristics more prevalent
+among popular tracks?
 
-Overarching Question:
-
-**What factors influence the popularity of songs across major music
-streaming platforms?**
-
-My Question:
-
-**Is track popularity associated with playlist inclusion?**
+To answer these questions, this report combines exploratory data
+analysis, visualization, and basic statistical techniques to examine
+relationships between popularity, playlist appearances, and audio
+features. While the dataset has limitations, including incomplete
+playlist metadata and the absence of temporal information, nonetheless
+provides a valuable opportunity to explore how song characteristics and
+playlist exposure interact within a modern streaming context.
 
 # **Data Ingest**
 
@@ -172,13 +179,15 @@ ggplot(track_counts, aes(x = popularity, y = playlist_appearances)) +
 
 ```
 
-This plot shows the relationship between track popularity and the number
-of playlist appearances in the dataset. All tracks appear exactly once
-because the SoundCloud-linked dataset represents one playlist
-association per track, meaning playlist frequency cannot vary; as a
-result, no meaningful relationship between popularity and playlist
-appearances can be inferred from this data, highlighting a structural
-limitation of the dataset rather than a musical trend
+This scatter plot examines the relationship between track popularity and
+the number of playlists in which a track appears. The majority of tracks
+cluster at a single playlist appearance regardless of popularity score,
+indicating that even highly popular songs are not necessarily included
+in multiple playlists. While a small number of moderately to highly
+popular tracks appear more frequently, the overall pattern shows no
+strong upward trend. This suggests that playlist inclusion is not
+strongly driven by popularity alone and may instead reflect playlist
+curation strategies, genre specialization, or user preferences.
 
 ## ***Most danceable songs***
 
@@ -191,16 +200,15 @@ SONGS %>%
 
 ```
 
-This table highlights the five most danceable songs in the dataset,
-ranked by Spotify’s danceability score. While these tracks all score
-extremely high on danceability—indicating strong rhythm and suitability
-for dancing—their popularity varies noticeably, ranging from moderately
-popular to highly popular songs. This suggests that although
-danceability contributes to a song’s appeal, it does not guarantee high
-popularity on its own, reinforcing the idea that popularity is
-influenced by multiple musical and contextual factors.
+The table highlights the most danceable tracks in the dataset, with
+danceability scores approaching the upper bound of the metric. Notably,
+some of these tracks—such as *“ice ice baby”* and *“bad bad bad”*—also
+exhibit high popularity, while others remain relatively less popular
+despite their strong rhythmic characteristics. This reinforces the idea
+that danceability contributes to popularity but does not guarantee
+widespread success on its own
 
-\## ***Danceability vs Popularity***
+***Danceability vs Popularity***
 
 ```{r}
 ggplot(SONGS, aes(x = danceability, y = popularity)) +
@@ -216,11 +224,13 @@ ggplot(SONGS, aes(x = danceability, y = popularity)) +
 
 ```
 
-This scatter plot reveals a weak but positive relationship between
-danceability and popularity. Although more danceable songs tend to have
-slightly higher popularity on average, the wide dispersion of points
-indicates that danceability is not a strong standalone predictor of a
-song’s popularity.
+This plot visualizes the relationship between danceability and
+popularity across all tracks. A weak positive trend is visible,
+indicating that tracks with higher danceability tend to be slightly more
+popular on average. However, the substantial dispersion of points shows
+that popularity varies widely at all danceability levels. This implies
+that while danceability may enhance a track’s appeal, it is only one of
+many factors influencing popularity.
 
 ## ***Energy Distribution of Popular Songs***
 
@@ -247,7 +257,7 @@ low-energy tracks are relatively rare among popular songs, suggesting
 that higher energy may be a common characteristic of broadly appealing
 music.
 
-\## ***Valence (Mood) of Popular Songs***
+***Valence (Mood) of Popular Songs***
 
 ```{r}
 SONGS %>%
@@ -298,43 +308,62 @@ with no clear tempo range dominating popular songs. This indicates that
 tempo alone does not play a major role in determining a track’s
 popularity.
 
+# **Statistical Analysis**
+
+```{r}
+# Correlation: Popularity vs Playlist Appearances
+cor.test(track_counts$popularity, track_counts$playlist_appearances)
+
+# Correlations with audio features
+cor.test(SONGS$danceability, SONGS$popularity)
+cor.test(SONGS$energy, SONGS$popularity)
+cor.test(SONGS$tempo, SONGS$popularity)
+cor.test(SONGS$valence, SONGS$popularity)
+
+# Linear regression
+model <- lm(popularity ~ danceability + energy + tempo + valence, data = SONGS)
+summary(model)
+
+```
+
+The statistical analysis reinforces the exploratory findings by showing
+that while several audio features are statistically associated with
+track popularity, their practical influence is limited. Pearson
+correlation tests indicate a small but statistically significant
+positive relationship between danceability and popularity (r = 0.059, p
+\< 0.001), suggesting that more danceable tracks tend to be slightly
+more popular on average. In contrast, energy shows a small but
+statistically significant negative correlation with popularity (r =
+−0.091, p \< 0.001), implying that extremely high-energy tracks may be
+less favored overall. Tempo exhibits a very weak and statistically
+insignificant relationship with popularity (r = 0.014, p = 0.084), while
+valence shows no meaningful association (r ≈ −0.006, p = 0.465). A
+multiple linear regression model confirms these patterns: danceability
+and tempo have positive, statistically significant coefficients, energy
+has a significant negative coefficient, and valence remains
+non-significant. However, the model explains only about 1.2% of the
+total variation in popularity (R² = 0.012), indicating that audio
+features alone account for very little of what drives popularity. Taken
+together, these results suggest that although certain musical
+characteristics are statistically detectable predictors of popularity,
+playlist inclusion and broader popularity on streaming platforms are
+likely driven primarily by external factors such as marketing, artist
+reputation, algorithmic promotion, and social dynamics rather than
+intrinsic audio features alone.
+
 # **Conclusion:**
 
-This analysis examined whether track popularity is associated with
-playlist inclusion in order to better understand broader factors that
-influence song popularity across major music streaming platforms. Using
-a SoundCloud-linked Spotify dataset, the results show that playlist
-inclusion alone is not a strong driver of popularity: most tracks appear
-in only one playlist regardless of their popularity score, indicating
-that playlist presence does not scale proportionally with popularity.
-While certain audio features such as danceability and energy exhibit
-weak positive relationships with popularity—suggesting that rhythmically
-engaging and moderately high-energy songs are more likely to achieve
-higher popularity—these effects are modest and highly variable. Popular
-songs also tend to cluster around mid-to-high valence levels, indicating
-a preference for emotionally positive or balanced tracks rather than
-extreme moods, while tempo shows little systematic relationship with
-popularity. Taken together, these findings suggest that song popularity
-is influenced by a combination of musical characteristics and platform
-dynamics rather than simple playlist exposure alone, highlighting the
-multifaceted nature of music consumption and discovery across streaming
-platforms
-
-# **Future Work**
-
-There are several ways this project could be extended to more fully
-address the factors that influence song popularity. First, incorporating
-richer playlist data—such as playlist follower counts, track order
-within playlists, and repeated appearances across multiple
-playlists—would allow for a more nuanced analysis of how playlist
-exposure impacts popularity. Second, integrating time-based information
-(e.g., release year, time since release, or changes in popularity over
-time) could help distinguish between long-term popularity and short-term
-viral success. Additionally, expanding the dataset to include direct
-SoundCloud engagement metrics, such as likes, reposts, or comments,
-would strengthen cross-platform comparisons. Finally, future analyses
-could move beyond exploratory visualization by incorporating predictive
-models or resampling-based inference to quantify the relative importance
-of different audio features and playlist dynamics, providing deeper
-insight into the mechanisms that drive song popularity on streaming
-platforms.
+This analysis examined factors influencing song popularity across
+streaming platforms by focusing on whether playlist inclusion is
+associated with popularity. Visual exploration showed a weak
+relationship between playlist appearances and popularity, with most
+tracks appearing in only one playlist regardless of popularity level.
+Statistical tests confirmed this finding, as the correlation between
+playlist appearances and popularity was undefined due to limited
+variation. In contrast, both visualizations and Pearson correlations
+revealed that danceability has a small but statistically significant
+positive association with popularity, while energy showed a modest
+negative relationship. A multivariate regression reinforced these
+results, indicating that audio features explain only a small fraction of
+popularity, suggesting that playlist inclusion and musical attributes
+alone are insufficient to fully account for popularity dynamics.
