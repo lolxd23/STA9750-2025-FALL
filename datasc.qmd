@@ -19,41 +19,43 @@ editor:
 
 # **Introduction:**
 
-Music streaming platforms such as Spotify and SoundCloud have
-fundamentally reshaped how listeners discover, consume, and share music.
-Rather than relying on traditional radio play or physical media, modern
-listeners increasingly engage with curated playlists, algorithmic
-recommendations, and social sharing features to explore new content. As
-a result, playlist inclusion has become a key mechanism through which
-songs gain exposure and, potentially, popularity. Understanding the
-relationship between playlist presence and track popularity is therefore
-an important step toward explaining how success is generated on
-contemporary streaming platforms.
+Over the past several decades, the consumption and discovery of music
+have undergone a dramatic transformation, shifting from physical media
+and radio programming toward digital streaming platforms powered by
+algorithms. Modern listeners rarely depend on CDs, radio countdowns, or
+store recommendations to find new music. Instead, they increasingly rely
+on automated systems such as curated playlists, algorithmic feeds, and
+social recommendations. Major platforms like Spotify leverage machine
+learning models to anticipate listener taste and predict song
+preferences, while community-based platforms like SoundCloud rely
+heavily on reposts and follower-driven exposure. Together, these
+features decentralize distribution, making pathways to musical success
+less linear and less controlled by industry gatekeepers than in previous
+eras.
 
-This project explores song popularity using a SoundCloud-linked dataset
-sourced from Hugging Face, which combines Spotify-style audio features
-with links to SoundCloud tracks. The dataset contains nearly 15,000
-songs along with detailed musical characteristics such as danceability,
-energy, valence (mood), tempo, and popularity scores. By leveraging both
-playlist metadata and audio features, this analysis aims to shed light
-on how measurable song attributes relate to broader patterns of
-popularity and exposure.
+In this emerging landscape, playlists play a particularly influential
+role. Playlists serve as curated gateways through which music is
+discovered, circulated, and eventually popularized. Many believe that
+being featured in a widely followed playlist directly contributes to a
+song’s rise in popularity. However, there is a gap between public
+perception and data-based evidence on whether playlist inclusion
+realistically drives visibility and streaming success — or whether
+popularity is largely shaped by external social dynamics such as viral
+sharing, artist branding, and digital marketing investment.
 
-The overarching research question guiding this analysis is: **What
-factors influence the popularity of songs across major music streaming
-platforms?** To address this broader question, the specific focus of
-this report is: **Is track popularity associated with playlist
-inclusion?** In other words, do more popular songs tend to appear in
-more playlists, and are certain musical characteristics more prevalent
-among popular tracks?
-
-To answer these questions, this report combines exploratory data
-analysis, visualization, and basic statistical techniques to examine
-relationships between popularity, playlist appearances, and audio
-features. While the dataset has limitations, including incomplete
-playlist metadata and the absence of temporal information, nonetheless
-provides a valuable opportunity to explore how song characteristics and
-playlist exposure interact within a modern streaming context.
+Motivated by this uncertainty, this report analyzes nearly 15,000 tracks
+from a SoundCloud-linked dataset hosted on Hugging Face, which combines
+playlist metadata, Spotify-style audio features, track popularity
+scores, and direct streaming links. This provides a rare opportunity to
+explore streaming metrics from both algorithmic and creator-driven
+perspectives. The guiding research question is therefore: **Is track
+popularity associated with playlist inclusion?** A supporting objective
+considers whether measurable audio characteristics contribute to
+popularity outcomes. By applying exploratory visuals and statistical
+methods, this analysis aims to determine whether songs that appear in
+more playlists or songs with certain musical traits tend to rise to
+greater levels of popularity — or whether these assumptions lack
+empirical support.
 
 # **Data Ingest**
 
@@ -86,14 +88,44 @@ glimpse(SONGS)
 
 ```
 
-The dataset used in this analysis was obtained from Hugging Face and
-contains Spotify song metadata linked to SoundCloud URLs. This dataset
-is appropriate because it combines popularity metrics, playlist
-information, and detailed audio features while also enabling direct
-reference to SoundCloud content. The dataset consists of 14,987
-observations and 23 variables, including track-level metadata, playlist
-attributes, audio features, sentiment labels, and SoundCloud links,
-making it well-suited for exploratory analysis of music popularity
+Data ingest refers to the process of bringing raw data into an
+analytical environment so that it can be examined, manipulated, and
+prepared for statistical modeling. In this project, ingestion involved
+importing a publicly accessible dataset from Hugging Face — a leading
+repository for datasets commonly used in machine learning, artificial
+intelligence, and data science. The dataset selected was appropriate
+because it merged two distinct domains of listener behavior:
+Spotify-style musical feature scoring and SoundCloud link-based
+exposure, thus offering a hybrid perspective that reflects both
+algorithmic recommendation and grassroots community engagement.
+
+Within the R environment, the dataset was read using CSV import
+functions and stored as a dataframe. Each row represented a unique track
+streamed on SoundCloud, while columns captured metadata and analytical
+properties of interest. Variables included track name, artist, album
+title, external SoundCloud link, popularity score, playlist name,
+playlist genre, playlist subgenre, and a set of Spotify-derived musical
+features — such as danceability, tempo, energy, and valence. The dataset
+originally consisted of 14,987 observations and 23 variables — a
+sufficiently large sample to support meaningful statistical inference
+and exploratory visualization.
+
+The decision to use this dataset was also driven by its alignment with
+the project's research goals. Because the study examines whether
+playlist exposure influences streaming success, it is essential that the
+dataset provides both playlist metadata and popularity metrics.
+Additionally, the inclusion of musical features enables a secondary
+layer of inquiry: whether popularity is driven by intrinsic qualities of
+a song — such as mood or rhythm — or whether it is driven externally by
+exposure mechanisms such as playlist placement.
+
+Furthermore, the ingest stage required validating that the dataset could
+be processed efficiently without extensive transformation. Basic checks
+ensured that character fields were readable, numeric values were
+correctly parsed, and variable types were appropriate for analyses such
+as correlations, aggregations, and regression. With ingest complete, the
+dataset was successfully loaded and prepared for subsequent cleaning and
+restructuring steps.
 
 # **Data Cleaning**
 
@@ -120,17 +152,54 @@ glimpse(PLAYLIST_TABLE)
 
 ```
 
-After initial ingestion, the dataset was cleaned to focus on variables
-most relevant to playlist behavior and song popularity. The cleaned
-table contains 14,987 observations and 8 key variables, including
-playlist name, artist name, track name, album name, popularity score,
-playlist genre and subgenre, and a corresponding SoundCloud link. Tracks
-with missing popularity values were removed to ensure consistency across
-analyses, allowing all visualizations and comparisons to rely on
-complete and comparable observations. This streamlined structure
-provides a balanced combination of playlist context, song metadata, and
-platform linkage, making it well-suited for exploratory analysis of how
-musical characteristics and playlist placement relate to popularity.
+After the initial ingestion step, the dataset underwent a structured
+data cleaning process designed to improve accuracy, enhance
+interpretability, and prepare the data for meaningful exploration.
+Because the goal of this project is to understand whether playlist
+presence is associated with popularity, the cleaning stage prioritized
+variables most directly related to playlist behavior, listener exposure,
+and measurable popularity outcomes. The original dataset contained 23
+raw variables — many of which were redundant, uninformative, or
+irrelevant to the research question. These included ID hashes, file
+directory information, metadata fields with excessive missingness, and
+columns that offered no analytical value. Removing such noise was
+necessary to create a more coherent, focused analytical structure.
+
+The cleaned table ultimately retained **14,987 observations and 8 key
+variables**, including playlist name, artist name, track name, album
+name, popularity score, playlist genre, playlist subgenre, and the
+corresponding SoundCloud link. These retained columns represent the
+minimum required information needed to investigate playlist placement,
+provide contextual metadata for songs, and link the data to an external
+platform where tracks may be experienced. Selecting only the variables
+that align directly with streaming dynamics ensures that subsequent
+analyses remain interpretable and aligned to the central research
+question.
+
+Additionally, **tracks with missing popularity values were removed** to
+ensure consistency across statistical outputs. Popularity is the
+dependent variable in this study; therefore, missing values would
+undermine the ability to compare songs fairly across playlists or within
+clusters of musical attributes. Rather than attempting to impute missing
+values — which would introduce artificial assumptions — the removal of
+incomplete records ensures that results are derived entirely from real,
+measurable data.
+
+A key part of cleaning also included preparing the data for
+playlist-level aggregation. Because the raw dataset recorded playlist
+membership at a per-row level, individual tracks appeared multiple times
+if they existed across several playlists. To evaluate playlist exposure
+as a single measurable feature, a new aggregated track-level table was
+created, counting the number of playlists each unique track–artist
+combination appeared in. This restructuring makes playlist exposure
+quantifiable and comparable across all songs.
+
+This streamlined dataset — containing only the most analytically
+relevant fields and complete popularity values — provides a balanced
+combination of playlist context, track metadata, and platform linkage.
+This clean foundation ensures that exploratory visualizations and
+statistical models accurately reflect the true dynamics of how playlist
+inclusion and musical characteristics relate to song popularity.
 
 # **Data Exploration**
 
@@ -326,44 +395,102 @@ summary(model)
 
 ```
 
-The statistical analysis reinforces the exploratory findings by showing
-that while several audio features are statistically associated with
-track popularity, their practical influence is limited. Pearson
-correlation tests indicate a small but statistically significant
-positive relationship between danceability and popularity (r = 0.059, p
-\< 0.001), suggesting that more danceable tracks tend to be slightly
-more popular on average. In contrast, energy shows a small but
-statistically significant negative correlation with popularity (r =
-−0.091, p \< 0.001), implying that extremely high-energy tracks may be
-less favored overall. Tempo exhibits a very weak and statistically
-insignificant relationship with popularity (r = 0.014, p = 0.084), while
-valence shows no meaningful association (r ≈ −0.006, p = 0.465). A
-multiple linear regression model confirms these patterns: danceability
-and tempo have positive, statistically significant coefficients, energy
-has a significant negative coefficient, and valence remains
-non-significant. However, the model explains only about 1.2% of the
-total variation in popularity (R² = 0.012), indicating that audio
-features alone account for very little of what drives popularity. Taken
-together, these results suggest that although certain musical
-characteristics are statistically detectable predictors of popularity,
-playlist inclusion and broader popularity on streaming platforms are
-likely driven primarily by external factors such as marketing, artist
-reputation, algorithmic promotion, and social dynamics rather than
-intrinsic audio features alone.
+Statistical analysis helps validate or refute patterns suggested by
+exploratory visuals. In this project, multiple statistical techniques
+were used to evaluate whether popularity is significantly associated
+with playlist exposure and whether musical characteristics meaningfully
+predict song success.
+
+The first analysis performed was a **Pearson correlation test**, which
+measured linear relationships between musical audio features and
+popularity scores. Results showed that:
+
+-   Danceability had a **weak but statistically significant** positive
+    correlation (r ≈ 0.059), indicating that more danceable songs tend
+    to be slightly more popular.
+
+-   Energy demonstrated a **weak negative correlation** (r ≈ −0.091),
+    suggesting overly intense songs may be less appealing to broad
+    listener groups.
+
+-   Tempo and valence showed **near-zero correlation**, suggesting no
+    meaningful linear association.
+
+However, correlation alone does not test combined predictive effects.
+Therefore, a **multiple linear regression model** was applied, using
+danceability, energy, tempo, and valence as predictor variables and
+popularity as the outcome. While some coefficients were statistically
+significant, the model’s **R² value was approximately 0.012**, meaning
+that only **1.2% of variation in popularity** can be explained by
+musical features alone.
+
+This extremely low explanatory power means that — even when combined —
+musical qualities account for **nearly none** of the factors that make
+songs popular within this dataset. If intrinsic musical structure were
+truly dominant, R² would be closer to 0.3 or above.
+
+Next, playlist exposure was considered. Because most tracks appear in
+only **one playlist**, playlist exposure lacks meaningful variance,
+making correlation statistically undefined. In other words, playlist
+count cannot explain popularity because playlist count itself rarely
+exceeds one. Playlist presence within this dataset **does not appear to
+materially influence** success.
+
+Collectively, statistical tests strongly suggest that **popularity is
+not determined by playlist count or musical composition**. Instead,
+popularity is likely driven by external mechanisms such as social media
+virality, artist influence, advertising campaigns, TikTok usage, and
+algorithmic boost — none of which are represented in the provided
+dataset.
 
 # **Conclusion:**
 
-This analysis examined factors influencing song popularity across
-streaming platforms by focusing on whether playlist inclusion is
-associated with popularity. Visual exploration showed a weak
-relationship between playlist appearances and popularity, with most
-tracks appearing in only one playlist regardless of popularity level.
-Statistical tests confirmed this finding, as the correlation between
-playlist appearances and popularity was undefined due to limited
-variation. In contrast, both visualizations and Pearson correlations
-revealed that danceability has a small but statistically significant
-positive association with popularity, while energy showed a modest
-negative relationship. A multivariate regression reinforced these
-results, indicating that audio features explain only a small fraction of
-popularity, suggesting that playlist inclusion and musical attributes
-alone are insufficient to fully account for popularity dynamics.
+This project set out to investigate whether playlist presence and
+musical characteristics meaningfully influence song popularity across
+music streaming platforms. Using a dataset containing nearly 15,000
+SoundCloud-linked tracks enriched with Spotify-style audio features, the
+analysis incorporated exploratory visualization and statistical testing
+to evaluate how popularity is distributed and whether it aligns with
+common assumptions about what makes a song successful.
+
+Across the exploratory visualizations, the results consistently pointed
+toward **very weak relationships** between musical characteristics and
+popularity. For example, the **Danceability vs. Popularity scatterplot**
+showed a cloud of data points with almost no visible trend, although a
+slight positive slope on the fitted line suggests that more danceable
+songs tend to have marginally higher popularity scores. However, the
+density and heavy overlap of observations indicate that danceability
+alone does not differentiate highly popular songs from those with very
+low scores; popular songs span the entire danceability range.
+
+The **Energy Distribution histogram**, filtered to include only tracks
+with popularity ≥ 70, demonstrated that moderately energetic music
+(values clustered between 0.5 and 0.8) appears most frequently among
+popular tracks, suggesting energy may influence listener appeal. Yet
+this distribution also revealed that extremely high-energy and
+low-energy songs are both underrepresented among popular tracks —
+meaning energy is associated with popularity, but only within a
+constrained optimal middle range.
+
+In contrast, the **Tempo vs. Popularity scatterplot** showed almost **no
+relationship at all**, evidenced visually by a nearly flat smoothed
+line. Popular songs can be slow, medium-tempo, or fast; this lack of
+structure strongly suggests that tempo does not meaningfully shape
+streaming success in this dataset.
+
+Together, visual patterns align with statistical results showing that
+musical features explain **only 1.2% of total popularity variance**,
+confirming that intrinsic musical composition is not the dominant driver
+of success. Additionally, playlist appearance data — not shown visually
+due to sparse variation — revealed that most tracks appear in only one
+playlist regardless of popularity, undermining the idea that playlist
+exposure drives success through cumulative visibility.
+
+Ultimately, this analysis concludes that **song popularity is only
+weakly connected to measurable musical characteristics and not
+meaningfully associated with playlist count** in this dataset. These
+findings imply that digital music success is more likely driven by
+**external factors** such as marketing, algorithmic placement, artist
+fanbase size, repost-chain virality, and social trends on platforms like
+TikTok — all of which fall outside the scope of this dataset and
+represent a valuable direction for future research.
